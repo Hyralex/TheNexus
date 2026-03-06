@@ -1,5 +1,8 @@
 import { Hono } from 'hono';
-import { serveStatic } from 'hono/bun';
+import { serve } from '@hono/node-server';
+import { serveStatic } from '@hono/node-server/serve-static';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const app = new Hono();
 
@@ -15,15 +18,15 @@ app.get('/api/health', (c) => {
   });
 });
 
-// Main route - serves index.html (handled by serveStatic)
+// Main route
 app.get('/', (c) => {
-  return c.html('<!-- Index served by serveStatic -->');
+  return c.html('<h1>The Nexus</h1>');
 });
 
 const port = process.env.PORT || 3000;
 console.log(`🚀 Server running on http://localhost:${port}`);
 
-export default {
-  port,
+serve({
   fetch: app.fetch,
-};
+  port: Number(port),
+});
