@@ -14,35 +14,39 @@
   position: fixed;
   height: 100vh;
   overflow-y: auto;
+  z-index: 100;
 }
 
-.sidebar nav .brand {
+.sidebar .brand {
   padding: 0.5rem 0;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
   font-size: 1.2rem;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+  padding-bottom: 1rem;
 }
 
-.sidebar nav ul {
+.sidebar .menu {
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
-.sidebar nav ul li {
+.sidebar .menu li {
   margin: 0.25rem 0;
 }
 
-.sidebar nav ul li a {
+.sidebar .menu li a {
   display: block;
-  padding: 0.5rem 0.75rem;
+  padding: 0.625rem 0.75rem;
   border-radius: var(--pico-border-radius);
   text-decoration: none;
   color: var(--pico-color);
   transition: background 0.2s;
+  font-weight: 400;
 }
 
-.sidebar nav ul li a:hover,
-.sidebar nav ul li a.active {
+.sidebar .menu li a:hover,
+.sidebar .menu li a.active {
   background: var(--pico-primary-background);
   color: var(--pico-primary-inverse);
 }
