@@ -747,6 +747,14 @@
       `;
     }
     
+    // Force hide all modals on load (safety check)
+    document.addEventListener('DOMContentLoaded', () => {
+      ['start-task-modal', 'edit-task-modal', 'task-details-modal', 'create-project-modal'].forEach(id => {
+        const modal = document.getElementById(id);
+        if (modal) modal.classList.remove('active');
+      });
+    });
+    
     // Run on load
     handleRouting();
     
