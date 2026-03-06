@@ -169,7 +169,7 @@
         <section class="card full-width">
           <header>
             <h2><i class="bi bi-chat-left-text"></i> Transcript</h2>
-            <button class="icon-btn" hx-get="/api/session" hx-trigger="load, every 5s" hx-include="#session-key-input">
+            <button class="icon-btn" onclick="loadSessionDetail(currentSessionKey)" title="Refresh">
               <i class="bi bi-arrow-clockwise"></i>
             </button>
           </header>
@@ -195,6 +195,7 @@
         currentSessionKey = decodeURIComponent(path.replace('/session/', ''));
         document.getElementById('session-key-input').value = currentSessionKey;
         loadSessionDetail(currentSessionKey);
+        startSessionAutoRefresh(currentSessionKey);
       } else if (path === '/sessions') {
         page = 'sessions';
       } else if (path === '/projects') {
@@ -230,6 +231,8 @@
     }
     
     // Load session detail
+    let sessionRefreshInterval = null;
+    
     function loadSessionDetail(sessionKey) {
       fetch(`/api/session/${encodeURIComponent(sessionKey)}`)
         .then(r => r.json())
@@ -241,6 +244,11 @@
           document.getElementById('session-detail-header').innerHTML = 
             `<div class="error-state"><i class="bi bi-exclamation-triangle"></i><p>Error: ${err.message}</p></div>`;
         });
+    }
+    
+    function startSessionAutoRefresh(sessionKey) {
+      if (sessionRefreshInterval) clearInterval(sessionRefreshInterval);
+      sessionRefreshInterval = setInterval(() => loadSessionDetail(sessionKey), 5000);
     }
     
     // Load tasks from API
