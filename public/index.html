@@ -405,36 +405,6 @@
           </div>
         </div>
       </div>
-        <div class="modal-content">
-          <header class="modal-header">
-            <h2><i class="bi bi-play-fill"></i> Start Task</h2>
-            <button class="icon-btn" onclick="closeStartTaskModal()" title="Close">
-              <i class="bi bi-x-lg"></i>
-            </button>
-          </header>
-          <div class="modal-body">
-            <div id="start-task-info" class="task-info"></div>
-            <form id="start-task-form" onsubmit="startTaskWithAgent(event)">
-              <div class="form-group">
-                <label for="agent-select">Select Agent</label>
-                <select id="agent-select" name="agentId" required>
-                  <option value="">Choose an agent...</option>
-                  <option value="main">🌙 Main (General tasks)</option>
-                  <option value="coder">👨💻 Coder (Development tasks)</option>
-                  <option value="tasker">🐝 Tasker (Task management)</option>
-                </select>
-              </div>
-              <input type="hidden" id="start-task-id" value="">
-              <div class="modal-actions">
-                <button type="button" class="secondary-btn" onclick="closeStartTaskModal()">Cancel</button>
-                <button type="submit" class="primary-btn">
-                  <i class="bi bi-play-fill"></i> Start Task
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
     </main>
   </div>
   
