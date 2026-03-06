@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>The Nexus</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/pico.min.css">
+  <link rel="stylesheet" href="/bootstrap-icons.min.css">
   <link rel="stylesheet" href="/styles.css?v=20260307-0910">
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.0/dist/htmx.min.js"></script>
 </head>
@@ -688,7 +688,7 @@
       let actionButtons = '';
       if (task.status === 'todo') {
         actionButtons = `
-          <button class="task-action-btn start-btn" onclick="showStartTaskModal('${task.id}', '${escapeHtml(task.title)}', '${escapeHtml(task.description || '')}')" title="Start task">
+          <button class="task-action-btn start-btn" data-task-id="${task.id}" data-task-title="${escapeHtml(task.title)}" data-task-description="${escapeHtml(task.description || '')}" title="Start task">
             <i class="bi bi-play-fill"></i> Start
           </button>
         `;
@@ -718,7 +718,7 @@
       ` : '';
       
       const editButton = `
-        <button class="task-action-btn edit-btn" onclick="showEditTaskModal('${task.id}', '${escapeHtml(task.title)}', '${escapeHtml(task.description || '')}', '${task.project}', '${task.priority || ''}', '${tagsArray.join(', ')}')" title="Edit task">
+        <button class="task-action-btn edit-btn" data-task-id="${task.id}" data-task-title="${escapeHtml(task.title)}" data-task-description="${escapeHtml(task.description || '')}" data-task-project="${task.project}" data-task-priority="${task.priority || ''}" data-task-tags="${escapeHtml(tagsArray.join(', '))}" title="Edit task">
           <i class="bi bi-pencil"></i>
         </button>
       `;
@@ -767,6 +767,30 @@
       ['start-task-modal', 'edit-task-modal', 'task-details-modal', 'create-project-modal'].forEach(id => {
         const modal = document.getElementById(id);
         if (modal) modal.classList.remove('active');
+      });
+      
+      // Event delegation for task action buttons (uses data attributes instead of inline onclick)
+      document.addEventListener('click', (e) => {
+        const editBtn = e.target.closest('.edit-btn');
+        if (editBtn) {
+          const taskId = editBtn.getAttribute('data-task-id');
+          const title = editBtn.getAttribute('data-task-title');
+          const description = editBtn.getAttribute('data-task-description') || '';
+          const project = editBtn.getAttribute('data-task-project');
+          const priority = editBtn.getAttribute('data-task-priority') || '';
+          const tags = editBtn.getAttribute('data-task-tags') || '';
+          showEditTaskModal(taskId, title, description, project, priority, tags);
+          return;
+        }
+        
+        const startBtn = e.target.closest('.start-btn');
+        if (startBtn) {
+          const taskId = startBtn.getAttribute('data-task-id');
+          const title = startBtn.getAttribute('data-task-title');
+          const description = startBtn.getAttribute('data-task-description') || '';
+          showStartTaskModal(taskId, title, description);
+          return;
+        }
       });
     });
     
