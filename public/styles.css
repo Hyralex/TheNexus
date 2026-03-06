@@ -926,6 +926,49 @@ select:focus {
     display: flex;
   }
   
+  /* Larger touch targets for mobile */
+  .task-action-btn {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+  }
+  
+  .task-card {
+    padding: 1rem;
+  }
+  
+  /* Ensure modals work on mobile */
+  .modal-overlay {
+    z-index: 1000 !important;
+  }
+  
+  .modal-content {
+    width: 95%;
+    max-height: 85vh;
+  }
+  
+  .modal-actions {
+    flex-direction: column;
+  }
+  
+  .modal-actions button {
+    width: 100%;
+    justify-content: center;
+    min-height: 48px;
+  }
+  
+  /* Task actions stack on mobile */
+  .task-actions {
+    flex-wrap: wrap;
+  }
+  
+  .task-action-btn {
+    flex: 1 1 calc(50% - 0.25rem);
+    min-height: 44px;
+    justify-content: center;
+  }
+  
   /* Sidebar becomes slide-in menu */
   .sidebar {
     width: 280px;
