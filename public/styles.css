@@ -1027,14 +1027,21 @@ select:focus {
     padding: 1rem;
   }
   
-  /* Ensure modals work on mobile */
+  /* Modal overlay covers full screen on mobile */
   .modal-overlay {
+    padding: 0.5rem;
+  }
+  
+  /* Ensure modals work on mobile */
+  .modal-overlay.active {
+    display: flex !important;
     z-index: 1000 !important;
   }
   
   .modal-content {
     width: 95%;
     max-height: 85vh;
+    margin: auto;
   }
   
   .modal-actions {
