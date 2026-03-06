@@ -1095,7 +1095,7 @@
     }
     
     function closeCreateProjectModal(event) {
-      if (!event || event.target.id === 'create-project-modal') {
+      if (!event || event.target === document.getElementById('create-project-modal')) {
         document.getElementById('create-project-modal').classList.remove('active');
       }
     }
@@ -1280,7 +1280,7 @@
     }
     
     function closeTaskDetailsModal(event) {
-      if (!event || event.target.id === 'task-details-modal') {
+      if (!event || event.target === document.getElementById('task-details-modal')) {
         document.getElementById('task-details-modal').classList.remove('active');
       }
     }
@@ -1301,7 +1301,7 @@
     }
     
     function closeEditTaskModal(event) {
-      if (!event || event.target.id === 'edit-task-modal') {
+      if (!event || event.target === document.getElementById('edit-task-modal')) {
         document.getElementById('edit-task-modal').classList.remove('active');
       }
     }
