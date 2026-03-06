@@ -6,6 +6,7 @@ import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { spawnRefinementAgent } from './refinement.js';
 
 const execAsync = promisify(exec);
 
@@ -382,35 +383,114 @@ app.get('/api/tasks', async (c) => {
 
 // Refinement logic - enriches task descriptions with context
 async function refineTaskDescription(title: string, description: string, project: string): Promise<string> {
-  // Basic refinement logic - in production this would call an LLM
-  // For now, we add structured sections based on the title and existing description
-  
-  const refinedSections: string[] = [];
-  
-  // Objective
-  refinedSections.push(`## Objective\n\n${description || title}. The goal is to complete this task successfully with clear outcomes.`);
-  
-  // Context
-  refinedSections.push(`## Context\n\nThis task was created for project "${project}". Further context should be gathered from project files (AGENTS.md, context.md) and related tasks.`);
-  
-  // Technical Approach
-  refinedSections.push(`## Technical Approach\n\n1. Analyze the requirements and understand the scope\n2. Review existing code and project structure\n3. Implement the solution following project conventions\n4. Test thoroughly before marking complete`);
-  
-  // Files to Modify
-  refinedSections.push(`## Files to Modify\n\n*To be determined based on task analysis. Check project structure and related tasks.*`);
-  
-  // Acceptance Criteria
-  refinedSections.push(`## Acceptance Criteria\n\n- [ ] Task objective is fully achieved\n- [ ] Code follows project conventions\n- [ ] Tests pass (if applicable)\n- [ ] No regressions introduced\n- [ ] Documentation updated (if needed)`);
-  
-  // Dependencies
-  refinedSections.push(`## Dependencies\n\n*Check related tasks in the project backlog for prerequisites.*`);
-  
-  // Potential Pitfalls
-  refinedSections.push(`## Potential Pitfalls\n\n- Ensure understanding of full requirements before implementation\n- Watch for edge cases and error handling\n- Consider impact on existing functionality`);
-  
-  return refinedSections.join('\n\n');
+  try {
+    console.log(`🤖 Spawning refinement agent for task: "${title}"`);
+    
+    // For now, use a placeholder that indicates agent-based refinement is needed
+    // TODO: Implement proper agent-based refinement using sessions_spawn API
+    // This will be replaced with actual subagent spawning that:
+    // 1. Reads /home/azureuser/dev/projects/${project}/AGENTS.md
+    // 2. Reads /home/azureuser/dev/projects/${project}/context.md  
+    // 3. Enriches the task description with project-specific context
+    // 4. Returns the refined description
+    
+    const refinementNote = `⚠️ **Awaiting Product Manager Agent Refinement**
+
+This task has been queued for automatic refinement by a Product Manager agent.
+
+**Original Task:**
+- Title: ${title}
+- Description: ${description || '(none provided)'}
+- Project: ${project}
+
+**What happens next:**
+1. A Product Manager agent will read this task
+2. The agent will review project context (AGENTS.md, context.md)
+3. The agent will enrich this description with:
+   - Clear objectives
+   - Project-specific context
+   - Technical approach
+   - Files to modify
+   - Acceptance criteria
+   - Dependencies
+   - Potential pitfalls
+
+**Status:** Pending refinement (auto-refinement in progress)
+
+---
+
+*This task will be automatically updated once the Product Manager agent completes refinement.*`;
+
+    console.log(`✅ Task queued for refinement: "${title}"`);
+    
+    // TODO: Spawn subagent asynchronously to refine this task
+    // The subagent will update the task description via API call
+    // For now, return the placeholder note
+    
+    return refinementNote;
+  } catch (error: any) {
+    console.error('❌ Error in task refinement:', error.message);
+    return description || title;
+  }
 }
 
+
+// Update task endpoint (used by refinement agent)
+app.put('/api/tasks/:id', async (c) => {
+  try {
+    const taskId = c.req.param('id');
+    const body = await c.req.json();
+    const { description, refined, refinedAt, refinedBy, title } = body;
+    
+    if (!fs.existsSync(PROJECTS_FILE)) {
+      return c.json({ error: 'Projects file not found' }, 404);
+    }
+    
+    const data = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8'));
+    
+    // Find and update the task
+    let found = false;
+    let updatedTask: any = null;
+    
+    for (const [projectName, project] of Object.entries(data.projects || {})) {
+      const proj = project as any;
+      if (proj.tasks) {
+        const task = proj.tasks.find((t: any) => t.id === taskId);
+        if (task) {
+          // Update fields if provided
+          if (description !== undefined) task.description = description;
+          if (refined !== undefined) task.refined = refined;
+          if (refinedAt !== undefined) task.refinedAt = refinedAt;
+          if (refinedBy !== undefined) task.refinedBy = refinedBy;
+          if (title !== undefined) task.title = title;
+          
+          // Clear awaitingRefinement flag
+          if (refined === true) {
+            task.awaitingRefinement = false;
+          }
+          
+          task.updatedAt = new Date().toISOString();
+          updatedTask = { ...task, project: projectName };
+          found = true;
+          break;
+        }
+      }
+    }
+    
+    if (!found) {
+      return c.json({ error: `Task '${taskId}' not found` }, 404);
+    }
+    
+    fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2) + '\n');
+    
+    console.log(`✓ Task ${taskId} updated (refinement complete)`);
+    
+    return c.json({ success: true, task: updatedTask });
+  } catch (error: any) {
+    console.error('Error updating task:', error.message);
+    return c.json({ error: error.message }, 500);
+  }
+});
 
 // Create new task endpoint
 app.post('/api/tasks', async (c) => {
@@ -444,36 +524,28 @@ app.post('/api/tasks', async (c) => {
     // Check if refinement should be skipped
     const shouldSkipRefinement = skipRefinement === true;
     
-    let finalDescription = description || '';
-    let refined = false;
-    let refinedAt = null;
-    let refinedBy = null;
-    let originalDescription = description !== undefined ? description : null;
-    
-    // Perform auto-refinement UNLESS skipRefinement is checked
-    if (!shouldSkipRefinement) {
-      console.log(`🔄 Auto-refining task: ${taskId} - "${title}"`);
-      finalDescription = await refineTaskDescription(title, description || '', project);
-      refined = true;
-      refinedAt = new Date().toISOString();
-      refinedBy = 'agent:coder:auto-refine';
-    }
-    
-    // Create new task with refinement metadata
+    // Create task immediately
     const newTask: any = {
       id: taskId,
       title,
-      description: finalDescription,
+      description: description || '',
       status: 'todo',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       // Refinement metadata
-      refined,
-      refinedAt,
-      refinedBy,
-      originalDescription: originalDescription !== undefined ? originalDescription : null,
-      skipRefinement: skipRefinement || false,
+      refined: false,
+      refinedAt: null,
+      refinedBy: null,
+      originalDescription: description !== undefined ? description : null,
+      skipRefinement: shouldSkipRefinement,
+      awaitingRefinement: !shouldSkipRefinement,
     };
+    
+    // Spawn refinement agent asynchronously (don't wait)
+    if (!shouldSkipRefinement) {
+      console.log(`🔄 Spawning refinement agent for task: ${taskId} - "${title}"`);
+      spawnRefinementAgent(taskId, title, description || '', project);
+    }
     
     // Add task to project
     if (!proj.tasks) {
@@ -485,9 +557,9 @@ app.post('/api/tasks', async (c) => {
     // Write back to file
     fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2) + '\n');
     
-    console.log(`✓ Task created: ${taskId}${refined ? ' (refined)' : ''}`);
+    console.log(`✓ Task created: ${taskId}${!shouldSkipRefinement ? ' (awaiting refinement)' : ''}`);
     
-    return c.json({ success: true, task: newTask, refined });
+    return c.json({ success: true, task: newTask, awaitingRefinement: !shouldSkipRefinement });
   } catch (error: any) {
     console.error('Error creating task:', error.message);
     return c.json({ error: error.message }, 500);
