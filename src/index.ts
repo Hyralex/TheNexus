@@ -3,6 +3,7 @@ import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import * as fs from 'fs';
 
 const execAsync = promisify(exec);
 
@@ -16,6 +17,19 @@ let activityLog: Array<{
   agent: string;
   message: string;
 }> = [];
+
+// Page routes - serve index.html for SPA routing
+app.get('/', (c) => {
+  return c.html(fs.readFileSync('./public/index.html', 'utf-8'));
+});
+
+app.get('/sessions', (c) => {
+  return c.html(fs.readFileSync('./public/index.html', 'utf-8'));
+});
+
+app.get('/gateway', (c) => {
+  return c.html(fs.readFileSync('./public/index.html', 'utf-8'));
+});
 
 // Serve static files from /public
 app.use('/*', serveStatic({ root: './public' }));
@@ -121,11 +135,6 @@ app.get('/api/activity', async (c) => {
     console.error('Error fetching activity:', error.message);
     return c.json({ error: error.message, active: 0, recent: [] });
   }
-});
-
-// Main route
-app.get('/', (c) => {
-  return c.html('<h1>The Nexus</h1>');
 });
 
 const port = process.env.PORT || 3000;
