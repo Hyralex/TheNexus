@@ -53,20 +53,35 @@ export async function spawnRefinementAgent(
 **Output:** Only output the refined description in markdown. No meta-commentary.`;
 
   try {
-    // Spawn subagent in background (don't wait for completion)
+    // Spawn subagent and capture its output
     const command = `openclaw agent --agent coder --message "${refinementPrompt.replace(/"/g, '\\"')}"`;
     
-    // Execute in background - don't await
-    execAsync(command, { timeout: 60000 })
-      .then(() => {
-        console.log(`✅ Refinement agent completed for task ${taskId}`);
-      })
-      .catch((error) => {
-        console.error(`❌ Refinement agent failed for task ${taskId}:`, error.message);
-      });
-    
     console.log(`✓ Refinement agent spawned for task ${taskId}`);
+    
+    // Execute and capture output
+    const { stdout } = await execAsync(command, { timeout: 60000 });
+    
+    // The agent's output IS the refined description
+    const refinedDescription = stdout.trim();
+    
+    if (refinedDescription) {
+      // Update the task via API - include project to avoid ID collisions
+      const updateCommand = `curl -s -X PUT "http://localhost:3000/api/tasks/${taskId}?project=${project}" \\
+        -H "Content-Type: application/json" \\
+        -d '${JSON.stringify({
+          description: refinedDescription,
+          refined: true,
+          refinedAt: new Date().toISOString(),
+          refinedBy: 'agent:coder:refinement',
+        }).replace(/'/g, "'\"'\"'")}'`;
+      
+      await execAsync(updateCommand);
+      
+      console.log(`✅ Task ${taskId} refined successfully in project ${project}`);
+    } else {
+      console.warn(`⚠️ Refinement agent returned empty output for task ${taskId}`);
+    }
   } catch (error: any) {
-    console.error(`❌ Error spawning refinement agent for task ${taskId}:`, error.message);
+    console.error(`❌ Error in refinement for task ${taskId}:`, error.message);
   }
 }

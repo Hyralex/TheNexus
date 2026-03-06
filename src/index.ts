@@ -439,6 +439,7 @@ This task has been queued for automatic refinement by a Product Manager agent.
 app.put('/api/tasks/:id', async (c) => {
   try {
     const taskId = c.req.param('id');
+    const projectFilter = c.req.query('project'); // Optional project filter
     const body = await c.req.json();
     const { description, refined, refinedAt, refinedBy, title } = body;
     
@@ -453,6 +454,11 @@ app.put('/api/tasks/:id', async (c) => {
     let updatedTask: any = null;
     
     for (const [projectName, project] of Object.entries(data.projects || {})) {
+      // If project filter is provided, only search in that project
+      if (projectFilter && projectName !== projectFilter) {
+        continue;
+      }
+      
       const proj = project as any;
       if (proj.tasks) {
         const task = proj.tasks.find((t: any) => t.id === taskId);
@@ -478,12 +484,12 @@ app.put('/api/tasks/:id', async (c) => {
     }
     
     if (!found) {
-      return c.json({ error: `Task '${taskId}' not found` }, 404);
+      return c.json({ error: `Task '${taskId}' not found${projectFilter ? ` in project '${projectFilter}'` : ''}` }, 404);
     }
     
     fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2) + '\n');
     
-    console.log(`✓ Task ${taskId} updated (refinement complete)`);
+    console.log(`✓ Task ${taskId} updated in project ${updatedTask.project} (refinement complete)`);
     
     return c.json({ success: true, task: updatedTask });
   } catch (error: any) {
