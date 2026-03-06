@@ -1525,11 +1525,15 @@
         return;
       }
       
+      // Find the task to get its project
+      const task = allTasks.find(t => t.id === taskId);
+      const project = task ? task.project : null;
+      
       try {
         const response = await fetch('/api/tasks/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ taskId, agentId }),
+          body: JSON.stringify({ taskId, agentId, project }),
         });
         
         const result = await response.json();

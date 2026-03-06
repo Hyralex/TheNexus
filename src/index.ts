@@ -814,7 +814,7 @@ app.delete('/api/tasks/:id', async (c) => {
 app.post('/api/tasks/start', async (c) => {
   try {
     const body = await c.req.json();
-    const { taskId, agentId } = body;
+    const { taskId, agentId, project } = body;
     
     if (!taskId || !agentId) {
       return c.json({ error: 'taskId and agentId are required' }, 400);
@@ -830,11 +830,15 @@ app.post('/api/tasks/start', async (c) => {
     let task: any = null;
     let projectName: string | null = null;
     
-    for (const [name, project] of Object.entries(data.projects || {})) {
-      const proj = project as any;
+    for (const [name, projData] of Object.entries(data.projects || {})) {
+      const proj = projData as any;
       if (proj.tasks) {
         const foundTask = proj.tasks.find((t: any) => t.id === taskId);
         if (foundTask) {
+          // If project filter is provided, only match if it's the right project
+          if (project && name !== project) {
+            continue;
+          }
           task = foundTask;
           projectName = name;
           break;
@@ -846,21 +850,72 @@ app.post('/api/tasks/start', async (c) => {
       return c.json({ error: `Task '${taskId}' not found` }, 404);
     }
     
-    // Build the task description for the subagent
-    const taskDescription = `Work on this task: ${task.title}${task.description ? ' - ' + task.description : ''}. This is task ${taskId} from project ${projectName}.`;
+    // Build comprehensive task brief for the subagent
+    const priority = task.priority || 'none';
+    const tags = Array.isArray(task.tags) ? task.tags.join(', ') : (task.tags || 'none');
+    const refined = task.refined ? 'Yes' : 'No';
+    const projectPath = `/home/azureuser/dev/projects/${projectName}/`;
+    
+    const taskBrief = `## Task Assignment: ${task.title}
+
+**Task ID:** ${taskId}
+**Project:** ${projectName}
+**Priority:** ${priority}
+**Tags:** ${tags}
+**Refined:** ${refined}
+
+**Description:**
+${task.description || '(No description provided)'}
+
+---
+
+## Project Context
+- **Project Path:** ${projectPath}
+- **AGENTS.md:** ${projectPath}AGENTS.md
+- **context.md:** ${projectPath}context.md
+
+Read the project's AGENTS.md and context.md before starting work.
+
+---
+
+## Task Completion Instructions
+
+**IMPORTANT:** When you have completed this task, you MUST update the task status using the project-manager skill:
+
+\`\`\`bash
+pm task done ${taskId} --project ${projectName}
+\`\`\`
+
+This marks the task as complete in TheNexus task board.
+
+**Available pm commands:**
+- \`pm task done <task-id> --project <project>\` - Mark task as done
+- \`pm task todo <task-id> --project <project>\` - Move back to todo
+- \`pm task in-progress <task-id> --project <project>\` - Set as in-progress
+
+---
+
+## Workflow
+1. Read project context (AGENTS.md, context.md)
+2. Understand the task requirements
+3. Complete the work
+4. **Mark task as done:** Run \`pm task done ${taskId} --project ${projectName}\`
+5. Announce completion
+
+---
+
+Work on this task now.`;
     
     // Spawn a subagent using openclaw command
     try {
       // Spawn subagent with the task - use background execution
       // The agent will run the task and announce completion
-      const spawnCommand = `openclaw agent --agent ${agentId} --message "${taskDescription.replace(/"/g, '\\"')}"`;
-      
-      console.log(`Spawning subagent: ${spawnCommand}`);
+      console.log(`Spawning subagent ${agentId} for task ${taskId}...`);
       
       // Execute in background (don't wait for completion)
       // Use spawn instead of exec for better background process handling
       const { spawn } = await import('child_process');
-      const child = spawn('openclaw', ['agent', '--agent', agentId, '--message', taskDescription], {
+      const child = spawn('openclaw', ['agent', '--agent', agentId, '--message', taskBrief], {
         env: { ...process.env, FORCE_COLOR: '0' },
         detached: true,
         stdio: 'ignore',
