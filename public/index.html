@@ -152,15 +152,16 @@
         
         const agents = sessions.map(s => {
           const age = formatAge(s.ageMs);
-          const kind = s.kind || 'direct';
           const model = s.model || '?';
-          const kindIcon = kind === 'group' ? 'bi-people' : 'bi-person';
+          const isSubagent = s.key.includes(':subagent:');
+          const agentType = isSubagent ? 'subagent' : 'agent';
+          const agentIcon = isSubagent ? 'bi-robot' : 'bi-cpu';
           return `
             <div class="agent-item">
-              <div class="agent-icon"><i class="bi ${kindIcon}"></i></div>
+              <div class="agent-icon"><i class="bi ${agentIcon}"></i></div>
               <div class="agent-info">
                 <strong>${s.agentId || 'unknown'}</strong>
-                <small>${kind} · ${model}</small>
+                <small>${agentType} · ${model}</small>
               </div>
               <div class="agent-meta">
                 <span class="badge">${age}</span>
@@ -217,14 +218,14 @@
         
         const rows = sessions.map(s => {
           const age = formatAge(s.ageMs);
-          const kind = s.kind || 'direct';
           const agent = s.agentId || 'main';
           const model = s.model || 'unknown';
           const tokens = s.totalTokens?.toLocaleString() || '0';
-          const kindIcon = kind === 'group' ? 'bi-people' : 'bi-person';
+          const isSubagent = s.key.includes(':subagent:');
+          const agentIcon = isSubagent ? 'bi-robot' : 'bi-cpu';
           return `
             <tr>
-              <td><span class="kind-icon"><i class="bi ${kindIcon}"></i></span> <code>${agent}</code></td>
+              <td><span class="kind-icon"><i class="bi ${agentIcon}"></i></span> <code>${agent}</code></td>
               <td>${model}</td>
               <td>${tokens}</td>
               <td><span class="age-badge">${age}</span></td>
