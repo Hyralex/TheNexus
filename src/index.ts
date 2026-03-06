@@ -441,7 +441,8 @@ app.put('/api/tasks/:id', async (c) => {
     const taskId = c.req.param('id');
     const projectFilter = c.req.query('project'); // Optional project filter
     const body = await c.req.json();
-    const { description, refined, refinedAt, refinedBy, title } = body;
+    // Accept all editable fields: title, description, project, priority, tags, and refinement fields
+    const { title, description, project: newProject, priority, tags, refined, refinedAt, refinedBy } = body;
     
     if (!fs.existsSync(PROJECTS_FILE)) {
       return c.json({ error: 'Projects file not found' }, 404);
@@ -449,9 +450,10 @@ app.put('/api/tasks/:id', async (c) => {
     
     const data = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8'));
     
-    // Find and update the task
+    // Find the task
     let found = false;
     let updatedTask: any = null;
+    let oldProjectName: string | null = null;
     
     for (const [projectName, project] of Object.entries(data.projects || {})) {
       // If project filter is provided, only search in that project
@@ -463,20 +465,51 @@ app.put('/api/tasks/:id', async (c) => {
       if (proj.tasks) {
         const task = proj.tasks.find((t: any) => t.id === taskId);
         if (task) {
+          oldProjectName = projectName;
+          
           // Update fields if provided
+          if (title !== undefined) task.title = title;
           if (description !== undefined) task.description = description;
+          if (priority !== undefined) task.priority = priority;
+          if (tags !== undefined) task.tags = tags;
           if (refined !== undefined) task.refined = refined;
           if (refinedAt !== undefined) task.refinedAt = refinedAt;
           if (refinedBy !== undefined) task.refinedBy = refinedBy;
-          if (title !== undefined) task.title = title;
           
-          // Clear awaitingRefinement flag
+          // Clear awaitingRefinement flag if refined
           if (refined === true) {
             task.awaitingRefinement = false;
           }
           
+          // Clear refinement flag when task is manually edited (description changed)
+          if (description !== undefined && task.refined === true) {
+            task.refined = false;
+            task.refinedAt = null;
+            task.refinedBy = null;
+            console.log(`⚠️ Task ${taskId} edited - refinement flag cleared`);
+          }
+          
           task.updatedAt = new Date().toISOString();
-          updatedTask = { ...task, project: projectName };
+          proj.updatedAt = new Date().toISOString();
+          
+          // Handle project change
+          if (newProject && newProject !== projectName) {
+            // Remove from old project
+            const taskIndex = proj.tasks.findIndex((t: any) => t.id === taskId);
+            if (taskIndex !== -1) {
+              const taskData = proj.tasks[taskIndex];
+              proj.tasks.splice(taskIndex, 1);
+              
+              // Add to new project
+              if (data.projects[newProject]) {
+                taskData.project = undefined; // Will be set when reading
+                data.projects[newProject].tasks.push(taskData);
+                data.projects[newProject].updatedAt = new Date().toISOString();
+              }
+            }
+          }
+          
+          updatedTask = { ...task, project: newProject || projectName };
           found = true;
           break;
         }
@@ -489,7 +522,7 @@ app.put('/api/tasks/:id', async (c) => {
     
     fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2) + '\n');
     
-    console.log(`✓ Task ${taskId} updated in project ${updatedTask.project} (refinement complete)`);
+    console.log(`✓ Task ${taskId} updated in project ${updatedTask.project}`);
     
     return c.json({ success: true, task: updatedTask });
   } catch (error: any) {
@@ -691,84 +724,6 @@ app.patch('/api/tasks/:id', async (c) => {
 
 // Start task with agent endpoint - spawns a subagent
 // Update task (full edit) endpoint
-app.put('/api/tasks/:id', async (c) => {
-  try {
-    const taskId = c.req.param('id');
-    const body = await c.req.json();
-    const { title, description, project: newProject, priority, tags } = body;
-    
-    if (!fs.existsSync(PROJECTS_FILE)) {
-      return c.json({ error: 'Projects file not found' }, 404);
-    }
-    
-    const data = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8'));
-    
-    // Find the task
-    let found = false;
-    let updatedTask: any = null;
-    let oldProjectName: string | null = null;
-    
-    for (const [projectName, project] of Object.entries(data.projects || {})) {
-      const proj = project as any;
-      if (proj.tasks) {
-        const task = proj.tasks.find((t: any) => t.id === taskId);
-        if (task) {
-          oldProjectName = projectName;
-          
-          // Update fields if provided
-          if (title) task.title = title;
-          if (description !== undefined) task.description = description;
-          if (priority) task.priority = priority;
-          if (tags) task.tags = tags;
-          
-          // Clear refinement flag when task is edited (description changed)
-          if (description !== undefined && task.refined === true) {
-            task.refined = false;
-            task.refinedAt = null;
-            task.refinedBy = null;
-            console.log(`⚠️ Task ${taskId} edited - refinement flag cleared`);
-          }
-          
-          task.updatedAt = new Date().toISOString();
-          proj.updatedAt = new Date().toISOString();
-          
-          // Handle project change
-          if (newProject && newProject !== projectName) {
-            // Remove from old project
-            const taskIndex = proj.tasks.findIndex((t: any) => t.id === taskId);
-            if (taskIndex !== -1) {
-              const taskData = proj.tasks[taskIndex];
-              proj.tasks.splice(taskIndex, 1);
-              
-              // Add to new project
-              if (data.projects[newProject]) {
-                taskData.project = undefined; // Will be set when reading
-                data.projects[newProject].tasks.push(taskData);
-                data.projects[newProject].updatedAt = new Date().toISOString();
-              }
-            }
-          }
-          
-          updatedTask = { ...task, project: newProject || projectName };
-          found = true;
-          break;
-        }
-      }
-    }
-    
-    if (!found) {
-      return c.json({ error: `Task '${taskId}' not found` }, 404);
-    }
-    
-    fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2));
-    
-    return c.json({ success: true, task: updatedTask });
-  } catch (error: any) {
-    console.error('Error updating task:', error.message);
-    return c.json({ error: error.message }, 500);
-  }
-});
-
 // Delete task endpoint
 app.delete('/api/tasks/:id', async (c) => {
   try {
