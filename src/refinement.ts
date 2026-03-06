@@ -9,6 +9,39 @@ import { promisify } from 'util';
 const execAsync = promisify(exec);
 
 /**
+ * Synchronously refine a task description using an agent
+ * Waits for agent to complete and returns the refined description
+ */
+export async function refineTaskDescriptionSync(
+  title: string,
+  description: string,
+  project: string
+): Promise<string> {
+  const refinementPrompt = `You are a Product Manager agent. Your job is to refine task descriptions.
+
+**Task to Refine:**
+- Title: ${title}
+- Description: ${description || '(no description provided)'}
+- Project: ${project}
+
+**Instructions:**
+1. Read the project context files at /home/azureuser/dev/projects/${project}/
+2. Enrich the task description with clear objective, context, technical approach, files to modify, acceptance criteria, dependencies, and potential pitfalls
+3. Fix any grammar issues
+
+**Output:** Return ONLY the refined description in markdown format. No meta-commentary.`;
+
+  try {
+    const command = `openclaw agent --agent coder --message "${refinementPrompt.replace(/"/g, '\\"')}"`;
+    const { stdout } = await execAsync(command, { timeout: 120000 }); // 2 minute timeout
+    return stdout.trim() || description;
+  } catch (error: any) {
+    console.error('Error in sync refinement:', error.message);
+    return description;
+  }
+}
+
+/**
  * Spawn a subagent to refine a task description
  * Runs asynchronously - doesn't wait for completion
  * The subagent will call PUT /api/tasks/:id to update the description

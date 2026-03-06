@@ -6,7 +6,7 @@ import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { spawnRefinementAgent } from './refinement.js';
+import { spawnRefinementAgent, refineTaskDescriptionSync } from './refinement.js';
 
 const execAsync = promisify(exec);
 
@@ -629,14 +629,17 @@ app.post('/api/tasks/:id/refine', async (c) => {
           projectName = name;
           
           // Store original description if not already stored
-          if (!task.originalDescription) {
+          if (!task.originalDescription || task.originalDescription === task.description) {
             task.originalDescription = task.description;
           }
           
-          // Perform refinement
-          task.description = await refineTaskDescription(task.title, task.description || '', name);
+          // Perform refinement synchronously
+          console.log(`🔄 Manually refining task ${taskId}...`);
+          task.description = await refineTaskDescriptionSync(task.title, task.description || '', name);
           task.refined = true;
           task.refinedAt = new Date().toISOString();
+          task.refinedBy = 'agent:coder:manual-refine';
+          task.awaitingRefinement = false;
           task.refinedBy = 'agent:coder:manual-refine';
           task.updatedAt = new Date().toISOString();
           task.skipRefinement = false;
