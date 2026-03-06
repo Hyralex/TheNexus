@@ -1307,6 +1307,44 @@ select:focus {
   }
 }
 
+/* Refinement Badges */
+.refinement-badge {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0.25rem 0;
+}
+
+.refinement-badge.refined {
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--accent-green);
+}
+
+.refinement-badge.needs-review {
+  background: rgba(210, 153, 34, 0.15);
+  color: var(--accent-yellow);
+}
+
+.refinement-badge.quick {
+  background: rgba(88, 166, 255, 0.15);
+  color: var(--accent-blue);
+}
+
+/* Detail badges for modal */
+.detail-badge.refined-badge {
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--accent-green);
+}
+
+.detail-badge.quick-badge {
+  background: rgba(88, 166, 255, 0.15);
+  color: var(--accent-blue);
+}
+
 /* Print styles */
 @media print {
   .mobile-header,

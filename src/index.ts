@@ -380,11 +380,53 @@ app.get('/api/tasks', async (c) => {
   }
 });
 
+// Refinement logic - enriches task descriptions with context
+async function refineTaskDescription(title: string, description: string, project: string): Promise<string> {
+  // Basic refinement logic - in production this would call an LLM
+  // For now, we add structured sections based on the title and existing description
+  
+  const refinedSections: string[] = [];
+  
+  // Objective
+  refinedSections.push(`## Objective\n\n${description || title}. The goal is to complete this task successfully with clear outcomes.`);
+  
+  // Context
+  refinedSections.push(`## Context\n\nThis task was created for project "${project}". Further context should be gathered from project files (AGENTS.md, context.md) and related tasks.`);
+  
+  // Technical Approach
+  refinedSections.push(`## Technical Approach\n\n1. Analyze the requirements and understand the scope\n2. Review existing code and project structure\n3. Implement the solution following project conventions\n4. Test thoroughly before marking complete`);
+  
+  // Files to Modify
+  refinedSections.push(`## Files to Modify\n\n*To be determined based on task analysis. Check project structure and related tasks.*`);
+  
+  // Acceptance Criteria
+  refinedSections.push(`## Acceptance Criteria\n\n- [ ] Task objective is fully achieved\n- [ ] Code follows project conventions\n- [ ] Tests pass (if applicable)\n- [ ] No regressions introduced\n- [ ] Documentation updated (if needed)`);
+  
+  // Dependencies
+  refinedSections.push(`## Dependencies\n\n*Check related tasks in the project backlog for prerequisites.*`);
+  
+  // Potential Pitfalls
+  refinedSections.push(`## Potential Pitfalls\n\n- Ensure understanding of full requirements before implementation\n- Watch for edge cases and error handling\n- Consider impact on existing functionality`);
+  
+  return refinedSections.join('\n\n');
+}
+
+// Check if task needs refinement
+function needsRefinement(description: string): boolean {
+  // Skip if description is already substantial (>100 chars) or has markdown structure
+  if (description.length > 100) return false;
+  if (description.includes('##') || description.includes('###')) return false;
+  if (description.includes('Objective') || description.includes('Acceptance')) return false;
+  
+  // Needs refinement if very short (<50 chars)
+  return description.length < 50;
+}
+
 // Create new task endpoint
 app.post('/api/tasks', async (c) => {
   try {
     const body = await c.req.json();
-    const { title, description, project } = body;
+    const { title, description, project, skipRefinement } = body;
     
     if (!title || !project) {
       return c.json({ error: 'Title and project are required' }, 400);
@@ -400,19 +442,47 @@ app.post('/api/tasks', async (c) => {
       return c.json({ error: `Project '${project}' not found` }, 404);
     }
     
-    // Generate task ID
+    // Generate task ID - find the highest existing task number and increment
     const proj = data.projects[project] as any;
-    const taskCount = (proj.tasks || []).length + 1;
-    const taskId = `task-${String(taskCount).padStart(3, '0')}`;
+    const existingTasks = proj.tasks || [];
+    const maxTaskNum = existingTasks.reduce((max: number, task: any) => {
+      const num = parseInt(task.id.replace('task-', ''), 10);
+      return num > max ? num : max;
+    }, 0);
+    const taskId = `task-${String(maxTaskNum + 1).padStart(3, '0')}`;
     
-    // Create new task
-    const newTask = {
+    // Check if refinement is needed
+    const shouldRefine = !skipRefinement && needsRefinement(description || '');
+    
+    let finalDescription = description || '';
+    let refined = false;
+    let refinedAt = null;
+    let refinedBy = null;
+    let originalDescription = description || '';
+    
+    // Perform auto-refinement if needed
+    if (shouldRefine) {
+      console.log(`🔄 Auto-refining task: ${taskId} - "${title}"`);
+      finalDescription = await refineTaskDescription(title, description || '', project);
+      refined = true;
+      refinedAt = new Date().toISOString();
+      refinedBy = 'agent:coder:auto-refine';
+    }
+    
+    // Create new task with refinement metadata
+    const newTask: any = {
       id: taskId,
       title,
-      description: description || '',
+      description: finalDescription,
       status: 'todo',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      // Refinement metadata
+      refined,
+      refinedAt,
+      refinedBy,
+      originalDescription: originalDescription !== undefined ? originalDescription : null,
+      skipRefinement: skipRefinement || false,
     };
     
     // Add task to project
@@ -425,9 +495,71 @@ app.post('/api/tasks', async (c) => {
     // Write back to file
     fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2) + '\n');
     
-    return c.json({ success: true, task: newTask });
+    console.log(`✓ Task created: ${taskId}${refined ? ' (refined)' : ''}`);
+    
+    return c.json({ success: true, task: newTask, refined });
   } catch (error: any) {
     console.error('Error creating task:', error.message);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+// Manual refinement endpoint
+app.post('/api/tasks/:id/refine', async (c) => {
+  try {
+    const taskId = c.req.param('id');
+    
+    if (!fs.existsSync(PROJECTS_FILE)) {
+      return c.json({ error: 'Projects file not found' }, 404);
+    }
+    
+    const data = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8'));
+    
+    // Find the task
+    let found = false;
+    let updatedTask: any = null;
+    let projectName: string | null = null;
+    
+    for (const [name, project] of Object.entries(data.projects || {})) {
+      const proj = project as any;
+      if (proj.tasks) {
+        const task = proj.tasks.find((t: any) => t.id === taskId);
+        if (task) {
+          projectName = name;
+          
+          // Store original description if not already stored
+          if (!task.originalDescription) {
+            task.originalDescription = task.description;
+          }
+          
+          // Perform refinement
+          task.description = await refineTaskDescription(task.title, task.description || '', name);
+          task.refined = true;
+          task.refinedAt = new Date().toISOString();
+          task.refinedBy = 'agent:coder:manual-refine';
+          task.updatedAt = new Date().toISOString();
+          task.skipRefinement = false;
+          
+          proj.updatedAt = new Date().toISOString();
+          updatedTask = { ...task, project: name };
+          found = true;
+          break;
+        }
+      }
+    }
+    
+    if (!found) {
+      return c.json({ error: `Task '${taskId}' not found` }, 404);
+    }
+    
+    // Write back to file
+    fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2) + '\n');
+    
+    console.log(`✓ Task manually refined: ${taskId}`);
+    
+    return c.json({ success: true, task: updatedTask });
+  } catch (error: any) {
+    console.error('Error refining task:', error.message);
     return c.json({ error: error.message }, 500);
   }
 });
@@ -520,6 +652,14 @@ app.put('/api/tasks/:id', async (c) => {
           if (description !== undefined) task.description = description;
           if (priority) task.priority = priority;
           if (tags) task.tags = tags;
+          
+          // Clear refinement flag when task is edited (description changed)
+          if (description !== undefined && task.refined === true) {
+            task.refined = false;
+            task.refinedAt = null;
+            task.refinedBy = null;
+            console.log(`⚠️ Task ${taskId} edited - refinement flag cleared`);
+          }
           
           task.updatedAt = new Date().toISOString();
           proj.updatedAt = new Date().toISOString();

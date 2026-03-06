@@ -198,6 +198,12 @@
               <select id="filter-tags" onchange="filterTasks()" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
                 <option value="">All Tags</option>
               </select>
+              <select id="filter-refinement" onchange="filterTasks()" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
+                <option value="">All Tasks</option>
+                <option value="refined">✅ Refined</option>
+                <option value="unrefined">⚠️ Needs Review</option>
+                <option value="quick">⚡ Quick</option>
+              </select>
             </div>
           </div>
           <button class="icon-btn" onclick="loadTasks()" title="Refresh">
@@ -231,6 +237,12 @@
                   <i class="bi bi-plus-lg"></i> Add Task
                 </button>
               </div>
+            </div>
+            <div style="margin-top: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" id="skip-refinement" name="skipRefinement" style="width: auto; min-height: auto;">
+              <label for="skip-refinement" style="margin: 0; cursor: pointer; color: var(--text-secondary); font-size: 0.875rem;">
+                <i class="bi bi-lightning-fill" style="color: var(--accent-blue);"></i> Skip refinement (quick task)
+              </label>
             </div>
           </form>
         </section>
@@ -347,6 +359,9 @@
             <div id="task-details-content"></div>
             <div class="modal-actions">
               <button type="button" class="secondary-btn" onclick="closeTaskDetailsModal()">Close</button>
+              <button type="button" class="secondary-btn" id="details-refine-btn" style="display: none;">
+                <i class="bi bi-stars"></i> Refine
+              </button>
               <button type="button" class="primary-btn" id="details-edit-btn">
                 <i class="bi bi-pencil"></i> Edit Task
               </button>
@@ -533,6 +548,7 @@
       const title = document.getElementById('task-title').value.trim();
       const description = document.getElementById('task-description').value.trim();
       const project = document.getElementById('task-project').value;
+      const skipRefinement = document.getElementById('skip-refinement').checked;
       
       if (!title || !project) {
         alert('Please fill in title and select a project');
@@ -543,7 +559,7 @@
         const response = await fetch('/api/tasks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, project }),
+          body: JSON.stringify({ title, description, project, skipRefinement }),
         });
         
         const result = await response.json();
@@ -626,6 +642,7 @@
       const projectFilter = document.getElementById('filter-project').value;
       const priorityFilter = document.getElementById('filter-priority').value;
       const tagFilter = document.getElementById('filter-tags').value;
+      const refinementFilter = document.getElementById('filter-refinement').value;
       
       const filtered = allTasks.filter(task => {
         const matchesSearch = !searchTerm || 
@@ -636,7 +653,17 @@
         const taskTags = Array.isArray(task.tags) ? task.tags : [];
         const matchesTag = !tagFilter || taskTags.includes(tagFilter);
         
-        return matchesSearch && matchesProject && matchesPriority && matchesTag;
+        // Refinement filter
+        let matchesRefinement = true;
+        if (refinementFilter === 'refined') {
+          matchesRefinement = task.refined === true;
+        } else if (refinementFilter === 'unrefined') {
+          matchesRefinement = !task.refined && !task.skipRefinement && task.description && task.description.length < 50;
+        } else if (refinementFilter === 'quick') {
+          matchesRefinement = task.skipRefinement === true;
+        }
+        
+        return matchesSearch && matchesProject && matchesPriority && matchesTag && matchesRefinement;
       });
       
       renderTasks(filtered);
@@ -644,6 +671,16 @@
     
     function renderTaskCard(task) {
       const date = new Date(task.createdAt).toLocaleDateString();
+      
+      // Refinement badge
+      let refinementBadge = '';
+      if (task.skipRefinement) {
+        refinementBadge = '<span class="refinement-badge quick" title="Quick task (skipped refinement)">⚡ Quick</span>';
+      } else if (task.refined) {
+        refinementBadge = '<span class="refinement-badge refined" title="Refined with AI">✅ Refined</span>';
+      } else if (!task.refined && task.description && task.description.length < 50) {
+        refinementBadge = '<span class="refinement-badge needs-review" title="Needs refinement">⚠️ Needs Review</span>';
+      }
       
       // Determine which action buttons to show based on status
       let actionButtons = '';
@@ -703,7 +740,8 @@
             ${priorityBadge}
           </div>
           <div class="task-title">${escapeHtml(task.title)}</div>
-          ${task.description ? `<div class="task-description">${escapeHtml(task.description)}</div>` : ''}
+          ${task.description ? `<div class="task-description">${escapeHtml(task.description).substring(0, 150)}${task.description.length > 150 ? '...' : ''}</div>` : ''}
+          ${refinementBadge}
           ${tagsHtml}
           <div class="task-meta">
             <span class="task-date"><i class="bi bi-calendar"></i> ${date}</span>
@@ -1194,6 +1232,39 @@
       }
     }
     
+    // Refine task manually
+    async function refineTask(taskId) {
+      try {
+        // Show loading state
+        const refineBtn = document.getElementById('details-refine-btn');
+        const originalText = refineBtn.innerHTML;
+        refineBtn.innerHTML = '<i class="bi bi-arrow-clockwise spinning"></i> Refining...';
+        refineBtn.disabled = true;
+        
+        const response = await fetch(`/api/tasks/${taskId}/refine`, {
+          method: 'POST',
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          // Reload tasks and close modal
+          loadTasks();
+          closeTaskDetailsModal();
+          alert('Task refined successfully!');
+        } else {
+          alert('Error: ' + (result.error || 'Failed to refine task'));
+          refineBtn.innerHTML = originalText;
+          refineBtn.disabled = false;
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+        const refineBtn = document.getElementById('details-refine-btn');
+        refineBtn.innerHTML = '<i class="bi bi-stars"></i> Refine';
+        refineBtn.disabled = false;
+      }
+    }
+    
     // Task details modal
     async function showTaskDetails(taskId) {
       try {
@@ -1206,12 +1277,43 @@
         const completed = task.completedAt ? new Date(task.completedAt).toLocaleString() : 'Not completed';
         const tags = Array.isArray(task.tags) && task.tags.length > 0 ? task.tags.join(', ') : 'None';
         
+        // Refinement info
+        let refinementInfo = '';
+        if (task.refined) {
+          const refinedAt = task.refinedAt ? new Date(task.refinedAt).toLocaleString() : 'Unknown';
+          refinementInfo = `
+            <div class="task-detail-section">
+              <h4><i class="bi bi-stars" style="color: var(--accent-green);"></i> Refinement</h4>
+              <div class="detail-grid">
+                <div class="detail-item"><strong>Refined:</strong> Yes</div>
+                <div class="detail-item"><strong>At:</strong> ${refinedAt}</div>
+                <div class="detail-item"><strong>By:</strong> ${task.refinedBy || 'Unknown'}</div>
+              </div>
+              ${task.originalDescription ? `
+                <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--bg-secondary); border-radius: 6px;">
+                  <strong>Original Description:</strong>
+                  <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary); font-size: 0.875rem;">${escapeHtml(task.originalDescription)}</p>
+                </div>
+              ` : ''}
+            </div>
+          `;
+        } else if (task.skipRefinement) {
+          refinementInfo = `
+            <div class="task-detail-section">
+              <h4><i class="bi bi-lightning-fill" style="color: var(--accent-blue);"></i> Quick Task</h4>
+              <p style="color: var(--text-secondary); font-size: 0.875rem;">This task was created with refinement skipped.</p>
+            </div>
+          `;
+        }
+        
         const html = `
           <div class="task-detail-section">
             <h3><i class="bi bi-card-text"></i> ${escapeHtml(task.title)}</h3>
             <div class="detail-meta">
               <span class="detail-badge status-${task.status}">${task.status}</span>
               ${task.priority ? `<span class="detail-badge priority-${task.priority}">${task.priority}</span>` : ''}
+              ${task.refined ? '<span class="detail-badge refined-badge">✅ Refined</span>' : ''}
+              ${task.skipRefinement ? '<span class="detail-badge quick-badge">⚡ Quick</span>' : ''}
             </div>
           </div>
           
@@ -1228,9 +1330,11 @@
           ${task.description ? `
           <div class="task-detail-section">
             <h4><i class="bi bi-chat-left-text"></i> Description</h4>
-            <p class="detail-description">${escapeHtml(task.description)}</p>
+            <p class="detail-description" style="white-space: pre-wrap;">${escapeHtml(task.description)}</p>
           </div>
           ` : ''}
+          
+          ${refinementInfo}
           
           ${tags !== 'None' ? `
           <div class="task-detail-section">
@@ -1251,10 +1355,22 @@
         `;
         
         document.getElementById('task-details-content').innerHTML = html;
+        
+        // Setup edit button
         document.getElementById('details-edit-btn').onclick = () => {
           closeTaskDetailsModal();
           showEditTaskModal(task.id, task.title, task.description || '', task.project, task.priority || '', tags);
         };
+        
+        // Setup refine button - show only if not refined and not quick task
+        const refineBtn = document.getElementById('details-refine-btn');
+        if (!task.refined && !task.skipRefinement) {
+          refineBtn.style.display = 'flex';
+          refineBtn.onclick = () => refineTask(task.id);
+        } else {
+          refineBtn.style.display = 'none';
+        }
+        
         const modal = document.getElementById('task-details-modal');
         modal.style.display = '';
         modal.classList.add('active');
