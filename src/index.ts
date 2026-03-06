@@ -43,10 +43,10 @@ app.get('/api/health', (c) => {
   });
 });
 
-// All sessions endpoint
+// All sessions endpoint - across all agents
 app.get('/api/sessions', async (c) => {
   try {
-    const { stdout } = await execAsync('openclaw sessions --json', {
+    const { stdout } = await execAsync('openclaw sessions --all-agents --json', {
       env: { ...process.env, FORCE_COLOR: '0' },
     });
     const sessions = JSON.parse(stdout);
@@ -57,10 +57,10 @@ app.get('/api/sessions', async (c) => {
   }
 });
 
-// Active sessions (last 5 minutes)
+// Active sessions (last 5 minutes) - across all agents
 app.get('/api/sessions/active', async (c) => {
   try {
-    const { stdout } = await execAsync('openclaw sessions --active 5 --json', {
+    const { stdout } = await execAsync('openclaw sessions --all-agents --active 5 --json', {
       env: { ...process.env, FORCE_COLOR: '0' },
     });
     const sessions = JSON.parse(stdout);
@@ -71,10 +71,10 @@ app.get('/api/sessions/active', async (c) => {
   }
 });
 
-// Activity feed - detects changes between polls
+// Activity feed - detects changes between polls - across all agents
 app.get('/api/activity', async (c) => {
   try {
-    const { stdout } = await execAsync('openclaw sessions --active 30 --json', {
+    const { stdout } = await execAsync('openclaw sessions --all-agents --active 30 --json', {
       env: { ...process.env, FORCE_COLOR: '0' },
     });
     const data = JSON.parse(stdout);
