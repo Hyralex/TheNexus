@@ -103,18 +103,59 @@
           </div>
         </section>
       </div>
+      
+      <!-- Session Detail Page -->
+      <div id="page-session-detail" class="page">
+        <header class="page-header">
+          <div>
+            <a href="/sessions" class="back-link"><i class="bi bi-arrow-left"></i> Back</a>
+            <h1 style="margin-top: 0.5rem;"><i class="bi bi-file-text"></i> Session Details</h1>
+          </div>
+          <button class="danger-btn" id="kill-session-btn" style="display: none;">
+            <i class="bi bi-stop-circle"></i> Kill Session
+          </button>
+        </header>
+        <section class="card full-width">
+          <div id="session-detail-header" class="session-header">
+            <div class="loading"><i class="bi bi-arrow-clockwise spinning"></i> Loading...</div>
+          </div>
+        </section>
+        <section class="card full-width">
+          <header>
+            <h2><i class="bi bi-chat-left-text"></i> Transcript</h2>
+            <button class="icon-btn" hx-get="/api/session" hx-trigger="load, every 5s" hx-include="#session-key-input">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+          </header>
+          <input type="hidden" id="session-key-input" value="">
+          <div id="session-transcript" class="transcript">
+            <div class="loading"><i class="bi bi-arrow-clockwise spinning"></i> Loading transcript...</div>
+          </div>
+        </section>
+      </div>
     </main>
   </div>
   
   <script>
+    let currentSessionKey = null;
+    
     // Handle URL routing on page load
     function handleRouting() {
       const path = window.location.pathname;
       let page = 'dashboard';
       
-      if (path === '/sessions') page = 'sessions';
-      else if (path === '/gateway') page = 'gateway';
-      else page = 'dashboard';
+      if (path.startsWith('/session/')) {
+        page = 'session-detail';
+        currentSessionKey = decodeURIComponent(path.replace('/session/', ''));
+        document.getElementById('session-key-input').value = currentSessionKey;
+        loadSessionDetail(currentSessionKey);
+      } else if (path === '/sessions') {
+        page = 'sessions';
+      } else if (path === '/gateway') {
+        page = 'gateway';
+      } else {
+        page = 'dashboard';
+      }
       
       // Show the right page
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -131,9 +172,24 @@
       const titles = {
         'dashboard': 'Dashboard | The Nexus',
         'sessions': 'Sessions | The Nexus',
-        'gateway': 'Gateway | The Nexus'
+        'gateway': 'Gateway | The Nexus',
+        'session-detail': 'Session | The Nexus'
       };
       document.title = titles[page];
+    }
+    
+    // Load session detail
+    function loadSessionDetail(sessionKey) {
+      fetch(`/api/session/${encodeURIComponent(sessionKey)}`)
+        .then(r => r.json())
+        .then(data => {
+          renderSessionHeader(data);
+          renderTranscript(data);
+        })
+        .catch(err => {
+          document.getElementById('session-detail-header').innerHTML = 
+            `<div class="error-state"><i class="bi bi-exclamation-triangle"></i><p>Error: ${err.message}</p></div>`;
+        });
     }
     
     // Run on load
@@ -223,8 +279,9 @@
           const tokens = s.totalTokens?.toLocaleString() || '0';
           const isSubagent = s.key.includes(':subagent:');
           const agentIcon = isSubagent ? 'bi-robot' : 'bi-cpu';
+          const encodedKey = encodeURIComponent(s.key);
           return `
-            <tr>
+            <tr onclick="window.location.href='/session/${encodedKey}'" style="cursor: pointer;">
               <td><span class="kind-icon"><i class="bi ${agentIcon}"></i></span> <code>${agent}</code></td>
               <td>${model}</td>
               <td>${tokens}</td>
@@ -272,6 +329,120 @@
         case 'completed': return '<i class="bi bi-check-circle-fill"></i>';
         default: return '<i class="bi bi-dot"></i>';
       }
+    }
+    
+    // Render session header
+    function renderSessionHeader(data) {
+      const session = data.session || {};
+      const isSubagent = (session.key || '').includes(':subagent:');
+      const agentIcon = isSubagent ? 'bi-robot' : 'bi-cpu';
+      const age = formatAge(session.ageMs);
+      
+      document.getElementById('session-detail-header').innerHTML = `
+        <div class="session-info">
+          <div class="session-icon ${isSubagent ? 'subagent' : 'agent'}">
+            <i class="bi ${agentIcon}"></i>
+          </div>
+          <div class="session-meta">
+            <h3>${session.agentId || 'unknown'}</h3>
+            <div class="session-stats">
+              <span class="stat"><i class="bi bi-cpu"></i> ${session.model || '?'}</span>
+              <span class="stat"><i class="bi bi-clock"></i> ${age}</span>
+              <span class="stat"><i class="bi bi-database"></i> ${(session.totalTokens || 0).toLocaleString()} tokens</span>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      // Show kill button if session is recent (active)
+      const killBtn = document.getElementById('kill-session-btn');
+      if (session.ageMs && session.ageMs < 3600000) { // Less than 1 hour old
+        killBtn.style.display = 'flex';
+        killBtn.onclick = () => killSession(session.key);
+      } else {
+        killBtn.style.display = 'none';
+      }
+    }
+    
+    // Render transcript
+    function renderTranscript(data) {
+      const messages = data.messages || [];
+      
+      if (messages.length === 0) {
+        document.getElementById('session-transcript').innerHTML = 
+          '<div class="empty-state"><i class="bi bi-chat-square"></i><p>No messages yet</p></div>';
+        return;
+      }
+      
+      const items = messages.map(msg => {
+        const role = msg.role || 'unknown';
+        const roleClass = role === 'user' ? 'user' : role === 'assistant' ? 'assistant' : 'system';
+        const roleIcon = role === 'user' ? 'bi-person' : role === 'assistant' ? 'bi-robot' : 'bi-gear';
+        const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : '';
+        
+        let content = '';
+        if (msg.content) {
+          const text = Array.isArray(msg.content) 
+            ? msg.content.map(c => c.text || '').join('')
+            : msg.content;
+          content = escapeHtml(text || '').substring(0, 500);
+        }
+        
+        // Check for tool calls
+        const toolCalls = msg.toolCalls || [];
+        const toolHtml = toolCalls.length > 0 ? `
+          <div class="tool-calls">
+            ${toolCalls.map(tc => `
+              <div class="tool-call">
+                <i class="bi bi-plug"></i>
+                <strong>${tc.name || 'unknown'}</strong>
+                <small>${tc.status || 'called'}</small>
+              </div>
+            `).join('')}
+          </div>
+        ` : '';
+        
+        return `
+          <div class="message ${roleClass}">
+            <div class="message-header">
+              <span class="message-role"><i class="bi ${roleIcon}"></i> ${role}</span>
+              <span class="message-time">${time}</span>
+            </div>
+            <div class="message-content">${content}${content.length >= 500 ? '...' : ''}</div>
+            ${toolHtml}
+          </div>
+        `;
+      }).reverse().join('');
+      
+      document.getElementById('session-transcript').innerHTML = `<div class="transcript-list">${items}</div>`;
+    }
+    
+    // Kill session
+    async function killSession(sessionKey) {
+      if (!confirm('Are you sure you want to kill this session?')) return;
+      
+      try {
+        const response = await fetch(`/api/session/${encodeURIComponent(sessionKey)}/kill`, {
+          method: 'POST',
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+          alert('Session aborted successfully');
+          window.location.href = '/sessions';
+        } else {
+          alert('Error: ' + (result.error || 'Failed to kill session'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+    
+    // Escape HTML
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
     }
   </script>
 </body>

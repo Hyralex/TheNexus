@@ -427,6 +427,198 @@ table code {
   font-weight: 600;
 }
 
+/* Back Link */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.2s;
+}
+
+.back-link:hover {
+  color: var(--accent-blue);
+}
+
+/* Danger Button */
+.danger-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background: rgba(248, 81, 73, 0.15);
+  border: 1px solid var(--accent-red);
+  color: var(--accent-red);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.danger-btn:hover {
+  background: var(--accent-red);
+  color: #fff;
+}
+
+/* Session Header */
+.session-header {
+  padding: 1rem;
+}
+
+.session-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.session-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+}
+
+.session-icon.agent {
+  background: rgba(88, 166, 255, 0.15);
+  color: var(--accent-blue);
+}
+
+.session-icon.subagent {
+  background: rgba(163, 113, 247, 0.15);
+  color: var(--accent-purple);
+}
+
+.session-meta h3 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.25rem;
+  color: var(--text-primary);
+}
+
+.session-stats {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.session-stats .stat {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.session-stats .stat i {
+  color: var(--accent-blue);
+}
+
+/* Transcript */
+.transcript {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.transcript-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.message {
+  padding: 1rem;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+}
+
+.message.user {
+  border-left: 3px solid var(--accent-blue);
+}
+
+.message.assistant {
+  border-left: 3px solid var(--accent-green);
+}
+
+.message.system {
+  border-left: 3px solid var(--accent-yellow);
+  background: rgba(210, 153, 34, 0.05);
+}
+
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.message-role {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+
+.message-role i {
+  color: var(--accent-blue);
+}
+
+.message-time {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.message-content {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Tool Calls */
+.tool-calls {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tool-call {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.8125rem;
+}
+
+.tool-call i {
+  color: var(--accent-purple);
+}
+
+.tool-call strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.tool-call small {
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
 .table-footer {
   padding: 0.75rem;
   color: var(--text-muted);

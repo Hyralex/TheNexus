@@ -31,6 +31,10 @@ app.get('/gateway', (c) => {
   return c.html(fs.readFileSync('./public/index.html', 'utf-8'));
 });
 
+app.get('/session/:key', (c) => {
+  return c.html(fs.readFileSync('./public/index.html', 'utf-8'));
+});
+
 // Serve static files from /public
 app.use('/*', serveStatic({ root: './public' }));
 
@@ -92,7 +96,7 @@ app.get('/api/activity', async (c) => {
           timestamp: new Date().toISOString(),
           type: 'new_session',
           agent: session.agentId || 'unknown',
-          message: `New ${session.kind} session started`,
+          message: `New session started`,
         });
       } else if (session.totalTokens !== existing.totalTokens) {
         // Session has new activity
@@ -134,6 +138,84 @@ app.get('/api/activity', async (c) => {
   } catch (error: any) {
     console.error('Error fetching activity:', error.message);
     return c.json({ error: error.message, active: 0, recent: [] });
+  }
+});
+
+// Single session details with history
+app.get('/api/session/:key', async (c) => {
+  try {
+    const sessionKey = decodeURIComponent(c.req.param('key'));
+    
+    // First get session metadata from all agents
+    const { stdout: sessionsOut } = await execAsync('openclaw sessions --all-agents --json', {
+      env: { ...process.env, FORCE_COLOR: '0' },
+    });
+    const sessionsData = JSON.parse(sessionsOut);
+    const session = sessionsData.sessions?.find((s: any) => s.key === sessionKey);
+    
+    if (!session) {
+      return c.json({ error: 'Session not found', messages: [] });
+    }
+    
+    // Read session store to get session file path
+    const storePath = sessionsData.stores?.find((s: any) => s.agentId === session.agentId)?.path;
+    if (!storePath) {
+      return c.json({ error: 'Store not found', session, messages: [] });
+    }
+    
+    const storeContent = fs.readFileSync(storePath, 'utf-8');
+    const store = JSON.parse(storeContent);
+    const sessionData = store[sessionKey];
+    
+    if (!sessionData?.sessionFile) {
+      return c.json({ error: 'Session file not found', session, messages: [] });
+    }
+    
+    // Read JSONL file and extract messages
+    const jsonlContent = fs.readFileSync(sessionData.sessionFile, 'utf-8');
+    const lines = jsonlContent.trim().split('\n').filter(line => line.trim());
+    const messages: any[] = [];
+    
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line);
+        if (entry.type === 'message' && entry.message) {
+          messages.push({
+            role: entry.message.role,
+            content: entry.message.content,
+            timestamp: entry.timestamp,
+            toolCalls: entry.message.toolCalls || [],
+          });
+        }
+      } catch (e) {
+        // Skip malformed lines
+      }
+    }
+    
+    return c.json({
+      session,
+      messages: messages.slice(-50), // Last 50 messages
+    });
+  } catch (error: any) {
+    console.error('Error fetching session history:', error.message);
+    return c.json({ error: error.message, session: null, messages: [] });
+  }
+});
+
+// Kill session endpoint
+app.post('/api/session/:key/kill', async (c) => {
+  try {
+    const sessionKey = decodeURIComponent(c.req.param('key'));
+    
+    // Use openclaw to abort the session
+    await execAsync(`openclaw chat abort "${sessionKey}"`, {
+      env: { ...process.env, FORCE_COLOR: '0' },
+    });
+    
+    return c.json({ success: true, message: 'Session aborted' });
+  } catch (error: any) {
+    console.error('Error killing session:', error.message);
+    return c.json({ error: error.message }, 500);
   }
 });
 
