@@ -20,6 +20,7 @@
       <ul class="menu">
         <li><a href="/"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
         <li><a href="/sessions"><i class="bi bi-clock-history"></i> Sessions</a></li>
+        <li><a href="/projects"><i class="bi bi-kanban"></i> Projects</a></li>
         <li><a href="/gateway"><i class="bi bi-hdd-network"></i> Gateway</a></li>
       </ul>
       <div class="sidebar-footer">
@@ -104,6 +105,51 @@
         </section>
       </div>
       
+      <!-- Projects Page -->
+      <div id="page-projects" class="page">
+        <header class="page-header">
+          <h1><i class="bi bi-kanban"></i> Project Tasks</h1>
+          <button class="icon-btn" hx-get="/api/tasks" hx-trigger="load, every 30s" title="Refresh">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
+        </header>
+        
+        <div class="dashboard-grid">
+          <!-- Todo Column -->
+          <section class="card">
+            <header>
+              <h2><i class="bi bi-circle"></i> Todo</h2>
+              <small id="todo-count">0</small>
+            </header>
+            <div id="todo-tasks" class="task-list">
+              <div class="loading"><i class="bi bi-arrow-clockwise spinning"></i> Loading...</div>
+            </div>
+          </section>
+          
+          <!-- In Progress Column -->
+          <section class="card">
+            <header>
+              <h2><i class="bi bi-half"></i> In Progress</h2>
+              <small id="inprogress-count">0</small>
+            </header>
+            <div id="inprogress-tasks" class="task-list">
+              <div class="loading"><i class="bi bi-arrow-clockwise spinning"></i> Loading...</div>
+            </div>
+          </section>
+          
+          <!-- Done Column -->
+          <section class="card">
+            <header>
+              <h2><i class="bi bi-check-circle"></i> Done</h2>
+              <small id="done-count">0</small>
+            </header>
+            <div id="done-tasks" class="task-list">
+              <div class="loading"><i class="bi bi-arrow-clockwise spinning"></i> Loading...</div>
+            </div>
+          </section>
+        </div>
+      </div>
+      
       <!-- Session Detail Page -->
       <div id="page-session-detail" class="page">
         <header class="page-header">
@@ -151,6 +197,9 @@
         loadSessionDetail(currentSessionKey);
       } else if (path === '/sessions') {
         page = 'sessions';
+      } else if (path === '/projects') {
+        page = 'projects';
+        loadTasks();
       } else if (path === '/gateway') {
         page = 'gateway';
       } else {
@@ -172,6 +221,7 @@
       const titles = {
         'dashboard': 'Dashboard | The Nexus',
         'sessions': 'Sessions | The Nexus',
+        'projects': 'Projects | The Nexus',
         'gateway': 'Gateway | The Nexus',
         'session-detail': 'Session | The Nexus'
       };
@@ -443,6 +493,60 @@
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+    
+    // Load tasks from API
+    function loadTasks() {
+      fetch('/api/tasks')
+        .then(r => r.json())
+        .then(data => {
+          renderTasks(data.tasks || []);
+        })
+        .catch(err => {
+          console.error('Error loading tasks:', err);
+          document.getElementById('todo-tasks').innerHTML = 
+            '<div class="error-state"><i class="bi bi-exclamation-triangle"></i><p>Error loading tasks</p></div>';
+        });
+    }
+    
+    // Render tasks into kanban columns
+    function renderTasks(tasks) {
+      const todo = tasks.filter(t => t.status === 'todo');
+      const inProgress = tasks.filter(t => t.status === 'in-progress');
+      const done = tasks.filter(t => t.status === 'done');
+      
+      document.getElementById('todo-count').textContent = todo.length;
+      document.getElementById('inprogress-count').textContent = inProgress.length;
+      document.getElementById('done-count').textContent = done.length;
+      
+      document.getElementById('todo-tasks').innerHTML = todo.length === 0 
+        ? '<div class="empty-state"><i class="bi bi-inbox"></i><p>No tasks</p></div>'
+        : todo.map(renderTaskCard).join('');
+      
+      document.getElementById('inprogress-tasks').innerHTML = inProgress.length === 0
+        ? '<div class="empty-state"><i class="bi bi-inbox"></i><p>No tasks</p></div>'
+        : inProgress.map(renderTaskCard).join('');
+      
+      document.getElementById('done-tasks').innerHTML = done.length === 0
+        ? '<div class="empty-state"><i class="bi bi-inbox"></i><p>No tasks</p></div>'
+        : done.map(renderTaskCard).join('');
+    }
+    
+    // Render single task card
+    function renderTaskCard(task) {
+      const date = new Date(task.createdAt).toLocaleDateString();
+      return `
+        <div class="task-card">
+          <div class="task-header">
+            <span class="task-id">${task.id}</span>
+            <span class="task-project">${task.project}</span>
+          </div>
+          <div class="task-title">${escapeHtml(task.title)}</div>
+          <div class="task-meta">
+            <span class="task-date"><i class="bi bi-calendar"></i> ${date}</span>
+          </div>
+        </div>
+      `;
     }
   </script>
 </body>

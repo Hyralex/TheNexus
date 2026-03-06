@@ -619,6 +619,69 @@ table code {
   margin-left: auto;
 }
 
+/* Task Board */
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 200px;
+}
+
+.task-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 0.875rem;
+  transition: all 0.2s;
+}
+
+.task-card:hover {
+  border-color: var(--accent-blue);
+  transform: translateY(-2px);
+}
+
+.task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.task-id {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--accent-blue);
+  background: rgba(88, 166, 255, 0.15);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.task-project {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.task-title {
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin-bottom: 0.5rem;
+}
+
+.task-meta {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.task-meta i {
+  font-size: 0.6875rem;
+}
+
 .table-footer {
   padding: 0.75rem;
   color: var(--text-muted);

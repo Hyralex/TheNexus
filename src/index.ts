@@ -4,6 +4,8 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 const execAsync = promisify(exec);
 
@@ -32,6 +34,10 @@ app.get('/gateway', (c) => {
 });
 
 app.get('/session/:key', (c) => {
+  return c.html(fs.readFileSync('./public/index.html', 'utf-8'));
+});
+
+app.get('/projects', (c) => {
   return c.html(fs.readFileSync('./public/index.html', 'utf-8'));
 });
 
@@ -216,6 +222,51 @@ app.post('/api/session/:key/kill', async (c) => {
   } catch (error: any) {
     console.error('Error killing session:', error.message);
     return c.json({ error: error.message }, 500);
+  }
+});
+
+// Projects API - read from ~/dev/projects/projects.json
+const PROJECTS_FILE = path.join(process.env.HOME || os.homedir(), 'dev', 'projects', 'projects.json');
+
+app.get('/api/projects', async (c) => {
+  try {
+    if (!fs.existsSync(PROJECTS_FILE)) {
+      return c.json({ projects: [], activeProject: null });
+    }
+    
+    const data = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8'));
+    return c.json(data);
+  } catch (error: any) {
+    console.error('Error reading projects:', error.message);
+    return c.json({ error: error.message, projects: [], activeProject: null });
+  }
+});
+
+app.get('/api/tasks', async (c) => {
+  try {
+    if (!fs.existsSync(PROJECTS_FILE)) {
+      return c.json({ tasks: [] });
+    }
+    
+    const data = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8'));
+    const allTasks: any[] = [];
+    
+    for (const [projectName, project] of Object.entries(data.projects || {})) {
+      const proj = project as any;
+      if (proj.tasks) {
+        for (const task of proj.tasks) {
+          allTasks.push({
+            ...task,
+            project: projectName,
+          });
+        }
+      }
+    }
+    
+    return c.json({ tasks: allTasks });
+  } catch (error: any) {
+    console.error('Error reading tasks:', error.message);
+    return c.json({ error: error.message, tasks: [] });
   }
 });
 
