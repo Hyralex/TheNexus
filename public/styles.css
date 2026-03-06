@@ -1,27 +1,262 @@
-/* Custom styles for Nexus Dashboard */
+/* The Nexus - Custom Styles */
 
-main.container {
-  padding-top: 2rem;
-  max-width: 800px;
+/* Layout */
+.layout {
+  display: flex;
+  min-height: 100vh;
 }
 
-h1 {
-  text-align: center;
-  margin-bottom: 2rem;
+.sidebar {
+  width: 240px;
+  background: var(--pico-card-background-color);
+  border-right: 1px solid var(--pico-muted-border-color);
+  padding: 1rem;
+  position: fixed;
+  height: 100vh;
+  overflow-y: auto;
 }
 
-section {
-  margin-bottom: 2rem;
+.sidebar nav .brand {
+  padding: 0.5rem 0;
+  margin-bottom: 1rem;
+  font-size: 1.2rem;
 }
 
-#health-status article {
+.sidebar nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar nav ul li {
+  margin: 0.25rem 0;
+}
+
+.sidebar nav ul li a {
+  display: block;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--pico-border-radius);
+  text-decoration: none;
+  color: var(--pico-color);
+  transition: background 0.2s;
+}
+
+.sidebar nav ul li a:hover,
+.sidebar nav ul li a.active {
+  background: var(--pico-primary-background);
+  color: var(--pico-primary-inverse);
+}
+
+.main-content {
+  flex: 1;
+  margin-left: 240px;
+  padding: 1.5rem;
+}
+
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+}
+
+.top-bar h1 {
+  margin: 0;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--pico-muted-color);
+}
+
+.status-indicator .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pico-form-element-valid-border-color);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Dashboard Grid */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.card {
   background: var(--pico-card-background-color);
   border: 1px solid var(--pico-muted-border-color);
   border-radius: var(--pico-border-radius);
   padding: 1rem;
+  margin-bottom: 1rem;
 }
 
-#health-status header {
-  margin-bottom: 0.5rem;
+.card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.card header h2 {
+  margin: 0;
   font-size: 1.1rem;
+}
+
+.card header small {
+  color: var(--pico-muted-color);
+}
+
+.card.full-width {
+  grid-column: 1 / -1;
+}
+
+/* Active Agents */
+.agent-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+}
+
+.agent-item:last-child {
+  border-bottom: none;
+}
+
+.agent-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.agent-info small {
+  color: var(--pico-muted-color);
+}
+
+.agent-meta .badge {
+  background: var(--pico-primary-background);
+  color: var(--pico-primary-inverse);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--pico-border-radius);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Activity Feed */
+.activity-feed {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+  font-size: 0.875rem;
+}
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.activity-icon {
+  font-size: 1rem;
+  min-width: 1.5rem;
+}
+
+.activity-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.activity-content strong {
+  font-size: 0.875rem;
+}
+
+.activity-content span {
+  color: var(--pico-muted-color);
+}
+
+.activity-time {
+  color: var(--pico-muted-color);
+  font-size: 0.75rem;
+}
+
+/* Activity types */
+.activity-item.new_session .activity-icon { color: var(--pico-primary); }
+.activity-item.activity .activity-icon { color: var(--pico-secondary); }
+.activity-item.completed .activity-icon { color: var(--pico-form-element-valid-border-color); }
+
+/* Tables */
+table {
+  font-size: 0.875rem;
+}
+
+table code {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.375rem;
+  background: var(--pico-muted-border-color);
+  border-radius: 4px;
+}
+
+/* Utilities */
+.muted {
+  color: var(--pico-muted-color);
+  font-style: italic;
+}
+
+.refresh-btn {
+  background: none;
+  border: 1px solid var(--pico-muted-border-color);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--pico-border-radius);
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.refresh-btn:hover {
+  background: var(--pico-muted-border-color);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 200px;
+  }
+  
+  .main-content {
+    margin-left: 200px;
+  }
+  
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 576px) {
+  .sidebar {
+    display: none;
+  }
+  
+  .main-content {
+    margin-left: 0;
+  }
 }

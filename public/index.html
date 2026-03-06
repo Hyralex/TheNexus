@@ -9,51 +9,137 @@
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.0/dist/htmx.min.js"></script>
 </head>
 <body>
-  <nav class="container-fluid">
-    <ul>
-      <li><strong>🚀 The Nexus</strong></li>
-    </ul>
-    <ul>
-      <li><a href="/">Dashboard</a></li>
-    </ul>
-  </nav>
-  
-  <main class="container">
-    <h1>Dashboard</h1>
+  <div class="layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <nav>
+        <div class="brand">
+          <strong>🚀 The Nexus</strong>
+        </div>
+        <ul>
+          <li><a href="/" class="active">Dashboard</a></li>
+          <li><a href="/sessions">Sessions</a></li>
+          <li><a href="/gateway">Gateway</a></li>
+        </ul>
+      </nav>
+    </aside>
     
-    <!-- Health Status -->
-    <section>
-      <h2>Server Status</h2>
-      <div id="health-status" hx-get="/api/health" hx-trigger="load, every 10s">
-        <p>Loading...</p>
-      </div>
-    </section>
-    
-    <!-- Sessions List -->
-    <section>
-      <header>
-        <h2>Sessions</h2>
-        <button hx-get="/api/sessions" hx-target="#sessions-list" hx-trigger="load, every 30s">
-          ↻ Refresh
-        </button>
+    <!-- Main Content -->
+    <main class="main-content">
+      <header class="top-bar">
+        <h1>Dashboard</h1>
+        <div class="status-indicator" id="server-status">
+          <span class="dot"></span>
+          <span id="status-text">Connecting...</span>
+        </div>
       </header>
-      <div id="sessions-list">
-        <p>Loading sessions...</p>
+      
+      <div class="dashboard-grid">
+        <!-- Active Agents Panel -->
+        <section class="card">
+          <header>
+            <h2>● Active Now</h2>
+            <small>Last 5 minutes</small>
+          </header>
+          <div id="active-agents" hx-get="/api/sessions/active" hx-trigger="load, every 10s">
+            <p>Loading active agents...</p>
+          </div>
+        </section>
+        
+        <!-- Activity Feed -->
+        <section class="card">
+          <header>
+            <h2>Activity Feed</h2>
+            <button class="refresh-btn" hx-get="/api/activity" hx-target="#activity-feed" hx-trigger="load, every 5s">
+              ↻
+            </button>
+          </header>
+          <div id="activity-feed" class="activity-feed">
+            <p>Waiting for activity...</p>
+          </div>
+        </section>
       </div>
-    </section>
-  </main>
+      
+      <!-- All Sessions -->
+      <section class="card full-width">
+        <header>
+          <h2>All Sessions</h2>
+          <button class="refresh-btn" hx-get="/api/sessions" hx-target="#sessions-list" hx-trigger="load, every 30s">
+            ↻ Refresh
+          </button>
+        </header>
+        <div id="sessions-list">
+          <p>Loading sessions...</p>
+        </div>
+      </section>
+    </main>
+  </div>
   
   <script>
-    // Health status formatter
+    // Server status
     htmx.on('htmx:afterSwap', function(evt) {
-      if (evt.detail.target.id === 'health-status') {
+      if (evt.detail.target.id === 'server-status') {
+        document.getElementById('status-text').textContent = 'Connected';
+      }
+    });
+    
+    // Active agents formatter
+    htmx.on('htmx:afterSwap', function(evt) {
+      if (evt.detail.target.id === 'active-agents') {
         const data = JSON.parse(evt.detail.xhr.responseText);
-        evt.detail.target.innerHTML = `
-          <article>
-            <header><strong>Status:</strong> ${data.status}</header>
-            <p>Uptime: ${data.uptime.toFixed(0)}s</p>
-          </article>
-        `;
+        const sessions = data.sessions || [];
+        
+        if (sessions.length === 0) {
+          evt.detail.target.innerHTML = '<p class="muted">No active agents</p>';
+          return;
+        }
+        
+        const agents = sessions.map(s => {
+          const age = formatAge(s.ageMs);
+          const kind = s.kind || 'direct';
+          const model = s.model || '?';
+          return `
+            <div class="agent-item">
+              <div class="agent-info">
+                <strong>${s.agentId || 'unknown'}</strong>
+                <small>${kind} · ${model}</small>
+              </div>
+              <div class="agent-meta">
+                <span class="badge">${age}</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+        
+        evt.detail.target.innerHTML = agents;
+      }
+      
+      // Activity feed formatter
+      if (evt.detail.target.id === 'activity-feed') {
+        const data = JSON.parse(evt.detail.xhr.responseText);
+        const activities = data.recent || [];
+        
+        if (activities.length === 0) {
+          evt.detail.target.innerHTML = '<p class="muted">No recent activity</p>';
+          return;
+        }
+        
+        const items = activities.map(a => {
+          const time = new Date(a.timestamp).toLocaleTimeString();
+          const icon = getActivityIcon(a.type);
+          return `
+            <div class="activity-item ${a.type}">
+              <span class="activity-icon">${icon}</span>
+              <div class="activity-content">
+                <strong>${a.agent}</strong>
+                <span>${a.message}</span>
+              </div>
+              <small class="activity-time">${time}</small>
+            </div>
+          `;
+        }).join('');
+        
+        evt.detail.target.innerHTML = items;
       }
       
       // Sessions formatter
@@ -114,6 +200,15 @@
       if (days > 0) return `${days}d`;
       if (hours > 0) return `${hours}h`;
       return `${mins}m`;
+    }
+    
+    function getActivityIcon(type) {
+      switch(type) {
+        case 'new_session': return '🆕';
+        case 'activity': return '⚡';
+        case 'completed': return '✅';
+        default: return '•';
+      }
     }
   </script>
 </body>
