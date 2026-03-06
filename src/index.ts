@@ -270,6 +270,245 @@ app.get('/api/tasks', async (c) => {
   }
 });
 
+// Create new task endpoint
+app.post('/api/tasks', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { title, description, project } = body;
+    
+    if (!title || !project) {
+      return c.json({ error: 'Title and project are required' }, 400);
+    }
+    
+    if (!fs.existsSync(PROJECTS_FILE)) {
+      return c.json({ error: 'Projects file not found' }, 404);
+    }
+    
+    const data = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8'));
+    
+    if (!data.projects || !data.projects[project]) {
+      return c.json({ error: `Project '${project}' not found` }, 404);
+    }
+    
+    // Generate task ID
+    const proj = data.projects[project] as any;
+    const taskCount = (proj.tasks || []).length + 1;
+    const taskId = `task-${String(taskCount).padStart(3, '0')}`;
+    
+    // Create new task
+    const newTask = {
+      id: taskId,
+      title,
+      description: description || '',
+      status: 'todo',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    
+    // Add task to project
+    if (!proj.tasks) {
+      proj.tasks = [];
+    }
+    proj.tasks.push(newTask);
+    proj.updatedAt = new Date().toISOString();
+    
+    // Write back to file
+    fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2) + '\n');
+    
+    return c.json({ success: true, task: newTask });
+  } catch (error: any) {
+    console.error('Error creating task:', error.message);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+// Update task status endpoint
+app.patch('/api/tasks/:id', async (c) => {
+  try {
+    const taskId = c.req.param('id');
+    const body = await c.req.json();
+    const { status } = body;
+    
+    if (!status || !['todo', 'in-progress', 'done'].includes(status)) {
+      return c.json({ error: 'Invalid status. Must be todo, in-progress, or done' }, 400);
+    }
+    
+    if (!fs.existsSync(PROJECTS_FILE)) {
+      return c.json({ error: 'Projects file not found' }, 404);
+    }
+    
+    const data = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8'));
+    
+    // Find the task across all projects
+    let found = false;
+    let updatedTask: any = null;
+    
+    for (const [projectName, project] of Object.entries(data.projects || {})) {
+      const proj = project as any;
+      if (proj.tasks) {
+        const task = proj.tasks.find((t: any) => t.id === taskId);
+        if (task) {
+          task.status = status;
+          task.updatedAt = new Date().toISOString();
+          
+          if (status === 'done') {
+            task.completedAt = new Date().toISOString();
+          } else if (status === 'in-progress') {
+            task.startedAt = new Date().toISOString();
+          }
+          
+          proj.updatedAt = new Date().toISOString();
+          updatedTask = { ...task, project: projectName };
+          found = true;
+          break;
+        }
+      }
+    }
+    
+    if (!found) {
+      return c.json({ error: `Task '${taskId}' not found` }, 404);
+    }
+    
+    // Write back to file
+    fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2) + '\n');
+    
+    return c.json({ success: true, task: updatedTask });
+  } catch (error: any) {
+    console.error('Error updating task:', error.message);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+// Start task with agent endpoint - spawns a subagent
+// Delete task endpoint
+app.delete('/api/tasks/:id', async (c) => {
+  try {
+    const taskId = c.req.param('id');
+    
+    if (!fs.existsSync(PROJECTS_FILE)) {
+      return c.json({ error: 'Projects file not found' }, 404);
+    }
+    
+    const data = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8'));
+    
+    // Find and delete the task across all projects
+    let found = false;
+    let deletedTask: any = null;
+    
+    for (const [projectName, project] of Object.entries(data.projects || {})) {
+      const proj = project as any;
+      if (proj.tasks) {
+        const taskIndex = proj.tasks.findIndex((t: any) => t.id === taskId);
+        if (taskIndex !== -1) {
+          deletedTask = { ...proj.tasks[taskIndex], project: projectName };
+          proj.tasks.splice(taskIndex, 1);
+          proj.updatedAt = new Date().toISOString();
+          found = true;
+          break;
+        }
+      }
+    }
+    
+    if (!found) {
+      return c.json({ error: `Task '${taskId}' not found` }, 404);
+    }
+    
+    fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2));
+    
+    return c.json({ success: true, task: deletedTask });
+  } catch (error: any) {
+    console.error('Error deleting task:', error.message);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+app.post('/api/tasks/start', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { taskId, agentId } = body;
+    
+    if (!taskId || !agentId) {
+      return c.json({ error: 'taskId and agentId are required' }, 400);
+    }
+    
+    if (!fs.existsSync(PROJECTS_FILE)) {
+      return c.json({ error: 'Projects file not found' }, 404);
+    }
+    
+    const data = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8'));
+    
+    // Find the task across all projects
+    let task: any = null;
+    let projectName: string | null = null;
+    
+    for (const [name, project] of Object.entries(data.projects || {})) {
+      const proj = project as any;
+      if (proj.tasks) {
+        const foundTask = proj.tasks.find((t: any) => t.id === taskId);
+        if (foundTask) {
+          task = foundTask;
+          projectName = name;
+          break;
+        }
+      }
+    }
+    
+    if (!task) {
+      return c.json({ error: `Task '${taskId}' not found` }, 404);
+    }
+    
+    // Build the task description for the subagent
+    const taskDescription = `Work on this task: ${task.title}${task.description ? ' - ' + task.description : ''}. This is task ${taskId} from project ${projectName}.`;
+    
+    // Spawn a subagent using openclaw command
+    try {
+      // Spawn subagent with the task - use background execution
+      // The agent will run the task and announce completion
+      const spawnCommand = `openclaw agent --agent ${agentId} --message "${taskDescription.replace(/"/g, '\\"')}"`;
+      
+      console.log(`Spawning subagent: ${spawnCommand}`);
+      
+      // Execute in background (don't wait for completion)
+      // Use spawn instead of exec for better background process handling
+      const { spawn } = await import('child_process');
+      const child = spawn('openclaw', ['agent', '--agent', agentId, '--message', taskDescription], {
+        env: { ...process.env, FORCE_COLOR: '0' },
+        detached: true,
+        stdio: 'ignore',
+      });
+      
+      child.unref(); // Allow parent to exit independently
+      
+      console.log(`Subagent ${agentId} spawned with PID ${child.pid}`);
+      
+      // Update task status to in-progress
+      task.status = 'in-progress';
+      task.startedAt = new Date().toISOString();
+      task.updatedAt = new Date().toISOString();
+      
+      const proj = data.projects[projectName!] as any;
+      proj.updatedAt = new Date().toISOString();
+      
+      // Write back to file
+      fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2) + '\n');
+      
+      return c.json({ 
+        success: true, 
+        message: `Subagent ${agentId} spawned for task ${taskId}`,
+        agentId,
+        taskId,
+        pid: child.pid,
+      });
+    } catch (spawnError: any) {
+      console.error('Error spawning subagent:', spawnError.message);
+      return c.json({ error: `Failed to spawn subagent: ${spawnError.message}` }, 500);
+    }
+  } catch (error: any) {
+    console.error('Error starting task:', error.message);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
 const port = process.env.PORT || 3000;
 console.log(`🚀 Server running on http://localhost:${port}`);
 

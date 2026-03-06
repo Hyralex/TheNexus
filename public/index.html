@@ -114,6 +114,36 @@
           </button>
         </header>
         
+        <!-- Create Task Form -->
+        <section class="card full-width">
+          <header>
+            <h2><i class="bi bi-plus-circle"></i> Create New Task</h2>
+          </header>
+          <form id="create-task-form" onsubmit="createTask(event)">
+            <div class="dashboard-grid" style="grid-template-columns: 1fr 2fr 1fr auto; gap: 1rem; align-items: end;">
+              <div>
+                <label for="task-title">Title</label>
+                <input type="text" id="task-title" name="title" required placeholder="Task title">
+              </div>
+              <div>
+                <label for="task-description">Description</label>
+                <input type="text" id="task-description" name="description" placeholder="Brief description (optional)">
+              </div>
+              <div>
+                <label for="task-project">Project</label>
+                <select id="task-project" name="project" required>
+                  <option value="">Loading...</option>
+                </select>
+              </div>
+              <div>
+                <button type="submit" class="primary-btn">
+                  <i class="bi bi-plus-lg"></i> Add Task
+                </button>
+              </div>
+            </div>
+          </form>
+        </section>
+        
         <div class="dashboard-grid">
           <!-- Todo Column -->
           <section class="card">
@@ -179,6 +209,39 @@
           </div>
         </section>
       </div>
+      
+      <!-- Start Task Modal -->
+      <div id="start-task-modal" class="modal-overlay" style="display: none;" onclick="closeStartTaskModal(event)">
+        <div class="modal-content">
+          <header class="modal-header">
+            <h2><i class="bi bi-play-fill"></i> Start Task</h2>
+            <button class="icon-btn" onclick="closeStartTaskModal()" title="Close">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </header>
+          <div class="modal-body">
+            <div id="start-task-info" class="task-info"></div>
+            <form id="start-task-form" onsubmit="startTaskWithAgent(event)">
+              <div class="form-group">
+                <label for="agent-select">Select Agent</label>
+                <select id="agent-select" name="agentId" required>
+                  <option value="">Choose an agent...</option>
+                  <option value="main">🌙 Main (General tasks)</option>
+                  <option value="coder">👨💻 Coder (Development tasks)</option>
+                  <option value="tasker">🐝 Tasker (Task management)</option>
+                </select>
+              </div>
+              <input type="hidden" id="start-task-id" value="">
+              <div class="modal-actions">
+                <button type="button" class="secondary-btn" onclick="closeStartTaskModal()">Cancel</button>
+                <button type="submit" class="primary-btn">
+                  <i class="bi bi-play-fill"></i> Start Task
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </main>
   </div>
   
@@ -200,6 +263,7 @@
         page = 'sessions';
       } else if (path === '/projects') {
         page = 'projects';
+        loadProjects();
         loadTasks();
         startTasksAutoRefresh();
       } else if (path === '/gateway') {
@@ -251,6 +315,62 @@
       sessionRefreshInterval = setInterval(() => loadSessionDetail(sessionKey), 5000);
     }
     
+    // Load projects for dropdown
+    async function loadProjects() {
+      try {
+        const response = await fetch('/api/projects');
+        const data = await response.json();
+        const select = document.getElementById('task-project');
+        const projects = data.projects || {};
+        
+        const options = Object.keys(projects).map(name => {
+          const project = projects[name];
+          const selected = name === data.activeProject ? ' selected' : '';
+          return `<option value="${name}"${selected}>${name}</option>`;
+        }).join('');
+        
+        select.innerHTML = options || '<option value="">No projects</option>';
+      } catch (err) {
+        console.error('Error loading projects:', err);
+        document.getElementById('task-project').innerHTML = '<option value="">Error</option>';
+      }
+    }
+    
+    // Create new task
+    async function createTask(event) {
+      event.preventDefault();
+      
+      const form = event.target;
+      const title = document.getElementById('task-title').value.trim();
+      const description = document.getElementById('task-description').value.trim();
+      const project = document.getElementById('task-project').value;
+      
+      if (!title || !project) {
+        alert('Please fill in title and select a project');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, description, project }),
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          // Clear form and reload tasks
+          form.reset();
+          loadTasks();
+        } else {
+          alert('Error: ' + (result.error || 'Failed to create task'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+    
     // Load tasks from API
     let tasksRefreshInterval = null;
     
@@ -296,6 +416,39 @@
     
     function renderTaskCard(task) {
       const date = new Date(task.createdAt).toLocaleDateString();
+      
+      // Determine which action buttons to show based on status
+      let actionButtons = '';
+      if (task.status === 'todo') {
+        actionButtons = `
+          <button class="task-action-btn start-btn" onclick="showStartTaskModal('${task.id}', '${escapeHtml(task.title)}', '${escapeHtml(task.description || '')}')" title="Start task">
+            <i class="bi bi-play-fill"></i> Start
+          </button>
+        `;
+      } else if (task.status === 'in-progress') {
+        actionButtons = `
+          <button class="task-action-btn complete-btn" onclick="updateTaskStatus('${task.id}', 'done')" title="Complete task">
+            <i class="bi bi-check-lg"></i> Complete
+          </button>
+          <button class="task-action-btn reopen-btn" onclick="updateTaskStatus('${task.id}', 'todo')" title="Move back to todo">
+            <i class="bi bi-arrow-left"></i> Reopen
+          </button>
+        `;
+      } else if (task.status === 'done') {
+        actionButtons = `
+          <button class="task-action-btn reopen-btn" onclick="updateTaskStatus('${task.id}', 'todo')" title="Reopen task">
+            <i class="bi bi-arrow-counterclockwise"></i> Reopen
+          </button>
+        `;
+      }
+      
+      // Delete button for all tasks
+      const deleteButton = `
+        <button class="task-action-btn delete-btn" onclick="deleteTask('${task.id}')" title="Delete task">
+          <i class="bi bi-trash"></i>
+        </button>
+      `;
+      
       return `
         <div class="task-card">
           <div class="task-header">
@@ -303,8 +456,13 @@
             <span class="task-project">${task.project}</span>
           </div>
           <div class="task-title">${escapeHtml(task.title)}</div>
+          ${task.description ? `<div class="task-description">${escapeHtml(task.description)}</div>` : ''}
           <div class="task-meta">
             <span class="task-date"><i class="bi bi-calendar"></i> ${date}</span>
+          </div>
+          <div class="task-actions">
+            ${actionButtons}
+            ${deleteButton}
           </div>
         </div>
       `;
@@ -562,6 +720,335 @@
       div.textContent = text;
       return div.innerHTML;
     }
+    
+    // Update task status
+    async function updateTaskStatus(taskId, newStatus) {
+      try {
+        const response = await fetch(`/api/tasks/${taskId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus }),
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          loadTasks();
+        } else {
+          alert('Error: ' + (result.error || 'Failed to update task status'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+    
+    async function deleteTask(taskId) {
+      if (!confirm('Are you sure you want to delete this task? This cannot be undone.')) return;
+      
+      try {
+        const response = await fetch(`/api/tasks/${taskId}`, {
+          method: 'DELETE',
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          loadTasks();
+        } else {
+          alert('Error: ' + (result.error || 'Failed to delete task'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+    
+    // Start task modal functions
+    function showStartTaskModal(taskId, title, description) {
+      document.getElementById('start-task-id').value = taskId;
+      document.getElementById('start-task-info').innerHTML = `
+        <div class="task-preview">
+          <h3>${escapeHtml(title)}</h3>
+          ${description ? `<p>${escapeHtml(description)}</p>` : ''}
+          <p class="task-instructions">Select which agent should work on this task:</p>
+        </div>
+      `;
+      document.getElementById('start-task-modal').style.display = 'flex';
+    }
+    
+    function closeStartTaskModal(event) {
+      if (!event || event.target === document.getElementById('start-task-modal')) {
+        document.getElementById('start-task-modal').style.display = 'none';
+      }
+    }
+    
+    // Start task with selected agent
+    async function startTaskWithAgent(event) {
+      event.preventDefault();
+      
+      const taskId = document.getElementById('start-task-id').value;
+      const agentId = document.getElementById('agent-select').value;
+      
+      if (!agentId) {
+        alert('Please select an agent');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/tasks/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ taskId, agentId }),
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          // Update task status to in-progress
+          await updateTaskStatus(taskId, 'in-progress');
+          closeStartTaskModal();
+          alert(`Task started with ${agentId} agent! Session: ${result.sessionKey || 'N/A'}`);
+        } else {
+          alert('Error: ' + (result.error || 'Failed to start task'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
   </script>
+  
+  <style>
+    /* Modal Styles */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      animation: fadeIn 0.2s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    .modal-content {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+      animation: slideIn 0.3s ease;
+    }
+    
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    .modal-header h2 {
+      margin: 0;
+      font-size: 1.25rem;
+    }
+    
+    .modal-body {
+      padding: 1.5rem;
+    }
+    
+    .task-info {
+      margin-bottom: 1.5rem;
+      padding: 1rem;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      border-left: 3px solid var(--accent-blue);
+    }
+    
+    .task-info h3 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.1rem;
+      color: var(--text-primary);
+    }
+    
+    .task-info p {
+      margin: 0.5rem 0;
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    
+    .task-instructions {
+      margin-top: 1rem;
+      font-style: italic;
+      font-size: 0.9rem;
+    }
+    
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+    
+    .form-group select {
+      width: 100%;
+      padding: 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+    }
+    
+    .modal-actions {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: flex-end;
+      margin-top: 1.5rem;
+    }
+    
+    .modal-actions button {
+      padding: 0.625rem 1.25rem;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .secondary-btn {
+      background: var(--bg-hover);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+    }
+    
+    .secondary-btn:hover {
+      background: var(--bg-hover);
+      border-color: var(--text-muted);
+    }
+    
+    .primary-btn {
+      background: var(--accent-blue);
+      border: none;
+      color: white;
+    }
+    
+    .primary-btn:hover {
+      background: #4094e8;
+      transform: translateY(-1px);
+    }
+    
+    .task-description {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      margin: 0.5rem 0;
+      padding: 0.5rem;
+      background: var(--bg-hover);
+      border-radius: 4px;
+    }
+    
+    .task-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+    
+    .task-action-btn {
+      flex: 1;
+      min-width: 80px;
+      padding: 0.5rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
+      transition: all 0.2s;
+    }
+    
+    .start-btn {
+      background: var(--accent-blue);
+      color: white;
+    }
+    
+    .start-btn:hover {
+      background: #4094e8;
+      transform: translateY(-1px);
+    }
+    
+    .complete-btn {
+      background: var(--accent-green);
+      color: white;
+    }
+    
+    .complete-btn:hover {
+      background: #2fa344;
+      transform: translateY(-1px);
+    }
+    
+    .reopen-btn {
+      background: var(--bg-hover);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-color);
+    }
+    
+    .reopen-btn:hover {
+      border-color: var(--text-muted);
+    }
+    
+    .delete-btn {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+      min-width: auto;
+      flex: none;
+      width: 36px;
+      padding: 0.5rem;
+    }
+    
+    .delete-btn:hover {
+      background: rgba(248, 81, 73, 0.15);
+      border-color: var(--accent-red);
+      color: var(--accent-red);
+    }
+  </style>
 </body>
 </html>
