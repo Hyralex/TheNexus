@@ -41,6 +41,10 @@ app.get('/projects', (c) => {
   return c.html(fs.readFileSync('./public/index.html', 'utf-8'));
 });
 
+app.get('/projects-manage', (c) => {
+  return c.html(fs.readFileSync('./public/index.html', 'utf-8'));
+});
+
 // Serve static files from /public
 app.use('/*', serveStatic({ root: './public' }));
 

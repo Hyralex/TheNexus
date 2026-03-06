@@ -442,6 +442,7 @@
         page = 'sessions';
       } else if (path === '/projects') {
         page = 'projects';
+        loadProjects(); // Load projects for dropdown
         loadTasks();
         startTasksAutoRefresh();
       } else if (path === '/projects-manage') {
