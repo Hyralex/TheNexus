@@ -1030,6 +1030,7 @@ select:focus {
   /* Modal overlay covers full screen on mobile */
   .modal-overlay {
     padding: 0.5rem;
+    display: none;
   }
   
   /* Ensure modals work on mobile */
