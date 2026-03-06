@@ -1,6 +1,6 @@
-# Nexus
+# TheNexus
 
-A lightweight web dashboard built with modern, minimal tools.
+Your personal AI mission control dashboard.
 
 ## Tech Stack
 
@@ -12,7 +12,7 @@ A lightweight web dashboard built with modern, minimal tools.
 ## Project Structure
 
 ```
-nexus/
+TheNexus/
 ├── package.json          # Dependencies and scripts
 ├── bunfig.toml          # Bun configuration
 ├── src/
@@ -34,8 +34,8 @@ nexus/
 
 ```bash
 # Clone the repository
-git clone https://github.com/hyralexaichanbot-bot/nexus.git
-cd nexus
+git clone https://github.com/hyralexaichanbot-bot/TheNexus.git
+cd TheNexus
 
 # Install dependencies
 bun install
