@@ -243,6 +243,65 @@
         });
     }
     
+    // Load tasks from API
+    let tasksRefreshInterval = null;
+    
+    function loadTasks() {
+      fetch('/api/tasks')
+        .then(r => r.json())
+        .then(data => {
+          renderTasks(data.tasks || []);
+        })
+        .catch(err => {
+          console.error('Error loading tasks:', err);
+          document.getElementById('todo-tasks').innerHTML = 
+            '<div class="error-state"><i class="bi bi-exclamation-triangle"></i><p>Error loading tasks</p></div>';
+        });
+    }
+    
+    function startTasksAutoRefresh() {
+      if (tasksRefreshInterval) clearInterval(tasksRefreshInterval);
+      tasksRefreshInterval = setInterval(loadTasks, 30000);
+    }
+    
+    function renderTasks(tasks) {
+      const todo = tasks.filter(t => t.status === 'todo');
+      const inProgress = tasks.filter(t => t.status === 'in-progress');
+      const done = tasks.filter(t => t.status === 'done');
+      
+      document.getElementById('todo-count').textContent = todo.length;
+      document.getElementById('inprogress-count').textContent = inProgress.length;
+      document.getElementById('done-count').textContent = done.length;
+      
+      document.getElementById('todo-tasks').innerHTML = todo.length === 0 
+        ? '<div class="empty-state"><i class="bi bi-inbox"></i><p>No tasks</p></div>'
+        : todo.map(renderTaskCard).join('');
+      
+      document.getElementById('inprogress-tasks').innerHTML = inProgress.length === 0
+        ? '<div class="empty-state"><i class="bi bi-inbox"></i><p>No tasks</p></div>'
+        : inProgress.map(renderTaskCard).join('');
+      
+      document.getElementById('done-tasks').innerHTML = done.length === 0
+        ? '<div class="empty-state"><i class="bi bi-inbox"></i><p>No tasks</p></div>'
+        : done.map(renderTaskCard).join('');
+    }
+    
+    function renderTaskCard(task) {
+      const date = new Date(task.createdAt).toLocaleDateString();
+      return `
+        <div class="task-card">
+          <div class="task-header">
+            <span class="task-id">${task.id}</span>
+            <span class="task-project">${task.project}</span>
+          </div>
+          <div class="task-title">${escapeHtml(task.title)}</div>
+          <div class="task-meta">
+            <span class="task-date"><i class="bi bi-calendar"></i> ${date}</span>
+          </div>
+        </div>
+      `;
+    }
+    
     // Run on load
     handleRouting();
     
@@ -494,68 +553,6 @@
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
-    }
-    
-    // Load tasks from API
-    let tasksRefreshInterval = null;
-    
-    function loadTasks() {
-      fetch('/api/tasks')
-        .then(r => r.json())
-        .then(data => {
-          renderTasks(data.tasks || []);
-        })
-        .catch(err => {
-          console.error('Error loading tasks:', err);
-          document.getElementById('todo-tasks').innerHTML = 
-            '<div class="error-state"><i class="bi bi-exclamation-triangle"></i><p>Error loading tasks</p></div>';
-        });
-    }
-    
-    // Auto-refresh tasks every 30s when on projects page
-    function startTasksAutoRefresh() {
-      if (tasksRefreshInterval) clearInterval(tasksRefreshInterval);
-      tasksRefreshInterval = setInterval(loadTasks, 30000);
-    }
-    
-    // Render tasks into kanban columns
-    function renderTasks(tasks) {
-      const todo = tasks.filter(t => t.status === 'todo');
-      const inProgress = tasks.filter(t => t.status === 'in-progress');
-      const done = tasks.filter(t => t.status === 'done');
-      
-      document.getElementById('todo-count').textContent = todo.length;
-      document.getElementById('inprogress-count').textContent = inProgress.length;
-      document.getElementById('done-count').textContent = done.length;
-      
-      document.getElementById('todo-tasks').innerHTML = todo.length === 0 
-        ? '<div class="empty-state"><i class="bi bi-inbox"></i><p>No tasks</p></div>'
-        : todo.map(renderTaskCard).join('');
-      
-      document.getElementById('inprogress-tasks').innerHTML = inProgress.length === 0
-        ? '<div class="empty-state"><i class="bi bi-inbox"></i><p>No tasks</p></div>'
-        : inProgress.map(renderTaskCard).join('');
-      
-      document.getElementById('done-tasks').innerHTML = done.length === 0
-        ? '<div class="empty-state"><i class="bi bi-inbox"></i><p>No tasks</p></div>'
-        : done.map(renderTaskCard).join('');
-    }
-    
-    // Render single task card
-    function renderTaskCard(task) {
-      const date = new Date(task.createdAt).toLocaleDateString();
-      return `
-        <div class="task-card">
-          <div class="task-header">
-            <span class="task-id">${task.id}</span>
-            <span class="task-project">${task.project}</span>
-          </div>
-          <div class="task-title">${escapeHtml(task.title)}</div>
-          <div class="task-meta">
-            <span class="task-date"><i class="bi bi-calendar"></i> ${date}</span>
-          </div>
-        </div>
-      `;
     }
   </script>
 </body>
