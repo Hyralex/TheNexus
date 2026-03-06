@@ -1319,6 +1319,12 @@ select:focus {
   margin: 0.25rem 0;
 }
 
+.refinement-badge.awaiting {
+  background: rgba(163, 113, 247, 0.15);
+  color: var(--accent-purple);
+  animation: pulse 2s infinite;
+}
+
 .refinement-badge.refined {
   background: rgba(63, 185, 80, 0.15);
   color: var(--accent-green);

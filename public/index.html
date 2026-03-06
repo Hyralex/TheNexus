@@ -674,7 +674,9 @@
       
       // Refinement badge
       let refinementBadge = '';
-      if (task.skipRefinement) {
+      if (task.awaitingRefinement) {
+        refinementBadge = '<span class="refinement-badge awaiting" title="AI agent is refining this task">⏳ Awaiting Refinement</span>';
+      } else if (task.skipRefinement) {
         refinementBadge = '<span class="refinement-badge quick" title="Quick task (skipped refinement)">⚡ Quick</span>';
       } else if (task.refined) {
         refinementBadge = '<span class="refinement-badge refined" title="Refined with AI">✅ Refined</span>';
@@ -730,6 +732,11 @@
       // Priority badge
       const priorityBadge = task.priority ? `
         <span class="priority-badge priority-${task.priority}">${task.priority}</span>
+      ` : '';
+      
+      // Awaiting refinement badge
+      const awaitingBadge = task.awaitingRefinement ? `
+        <span class="detail-badge awaiting-badge">⏳ Awaiting Refinement</span>
       ` : '';
       
       return `
