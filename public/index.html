@@ -1091,12 +1091,12 @@
     }
     
     function showCreateProjectModal() {
-      document.getElementById('create-project-modal').style.display = 'flex';
+      document.getElementById('create-project-modal').classList.add('active');
     }
     
     function closeCreateProjectModal(event) {
       if (!event || event.target.id === 'create-project-modal') {
-        document.getElementById('create-project-modal').style.display = 'none';
+        document.getElementById('create-project-modal').classList.remove('active');
       }
     }
     
@@ -1272,7 +1272,7 @@
           closeTaskDetailsModal();
           showEditTaskModal(task.id, task.title, task.description || '', task.project, task.priority || '', tags);
         };
-        document.getElementById('task-details-modal').style.display = 'flex';
+        document.getElementById('task-details-modal').classList.add('active');
       } catch (err) {
         console.error('Error loading task details:', err);
         alert('Error loading task details');
@@ -1281,7 +1281,7 @@
     
     function closeTaskDetailsModal(event) {
       if (!event || event.target.id === 'task-details-modal') {
-        document.getElementById('task-details-modal').style.display = 'none';
+        document.getElementById('task-details-modal').classList.remove('active');
       }
     }
     
@@ -1297,12 +1297,12 @@
       await loadProjectsForEdit();
       document.getElementById('edit-project').value = project;
       
-      document.getElementById('edit-task-modal').style.display = 'flex';
+      document.getElementById('edit-task-modal').classList.add('active');
     }
     
     function closeEditTaskModal(event) {
       if (!event || event.target.id === 'edit-task-modal') {
-        document.getElementById('edit-task-modal').style.display = 'none';
+        document.getElementById('edit-task-modal').classList.remove('active');
       }
     }
     
@@ -1362,12 +1362,12 @@
           <p class="task-instructions">Select which agent should work on this task:</p>
         </div>
       `;
-      document.getElementById('start-task-modal').style.display = 'flex';
+      document.getElementById('start-task-modal').classList.add('active');
     }
     
     function closeStartTaskModal(event) {
       if (!event || event.target === document.getElementById('start-task-modal')) {
-        document.getElementById('start-task-modal').style.display = 'none';
+        document.getElementById('start-task-modal').classList.remove('active');
       }
     }
     
