@@ -411,16 +411,6 @@ async function refineTaskDescription(title: string, description: string, project
   return refinedSections.join('\n\n');
 }
 
-// Check if task needs refinement
-function needsRefinement(description: string): boolean {
-  // Skip if description is already substantial (>100 chars) or has markdown structure
-  if (description.length > 100) return false;
-  if (description.includes('##') || description.includes('###')) return false;
-  if (description.includes('Objective') || description.includes('Acceptance')) return false;
-  
-  // Needs refinement if very short (<50 chars)
-  return description.length < 50;
-}
 
 // Create new task endpoint
 app.post('/api/tasks', async (c) => {
@@ -451,17 +441,17 @@ app.post('/api/tasks', async (c) => {
     }, 0);
     const taskId = `task-${String(maxTaskNum + 1).padStart(3, '0')}`;
     
-    // Check if refinement is needed
-    const shouldRefine = !skipRefinement && needsRefinement(description || '');
+    // Check if refinement should be skipped
+    const shouldSkipRefinement = skipRefinement === true;
     
     let finalDescription = description || '';
     let refined = false;
     let refinedAt = null;
     let refinedBy = null;
-    let originalDescription = description || '';
+    let originalDescription = description !== undefined ? description : null;
     
-    // Perform auto-refinement if needed
-    if (shouldRefine) {
+    // Perform auto-refinement UNLESS skipRefinement is checked
+    if (!shouldSkipRefinement) {
       console.log(`🔄 Auto-refining task: ${taskId} - "${title}"`);
       finalDescription = await refineTaskDescription(title, description || '', project);
       refined = true;
