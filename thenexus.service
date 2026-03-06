@@ -1,0 +1,21 @@
+[Unit]
+Description=TheNexus Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=azureuser
+WorkingDirectory=/home/azureuser/dev/TheNexus
+ExecStart=/usr/bin/env bash -c 'source /home/linuxbrew/.linuxbrew/bin/brew shellenv 2>/dev/null; PORT=3000 npm run start'
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=thenexus
+
+# Environment
+Environment="NODE_ENV=production"
+Environment="PATH=/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/usr/bin:/bin"
+
+[Install]
+WantedBy=multi-user.target

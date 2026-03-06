@@ -20,7 +20,8 @@
       <ul class="menu">
         <li><a href="/"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
         <li><a href="/sessions"><i class="bi bi-clock-history"></i> Sessions</a></li>
-        <li><a href="/projects"><i class="bi bi-kanban"></i> Projects</a></li>
+        <li><a href="/projects"><i class="bi bi-kanban"></i> Task Board</a></li>
+        <li><a href="/projects-manage"><i class="bi bi-folder"></i> Projects</a></li>
         <li><a href="/gateway"><i class="bi bi-hdd-network"></i> Gateway</a></li>
       </ul>
       <div class="sidebar-footer">
@@ -41,6 +42,19 @@
         </header>
         
         <div class="dashboard-grid">
+          <!-- Statistics Panel -->
+          <section class="card">
+            <header>
+              <h2><i class="bi bi-bar-chart-line"></i> Overview</h2>
+              <button class="icon-btn" onclick="loadStats()" title="Refresh">
+                <i class="bi bi-arrow-clockwise"></i>
+              </button>
+            </header>
+            <div id="stats-panel" class="stats-grid">
+              <div class="loading"><i class="bi bi-arrow-clockwise spinning"></i> Loading...</div>
+            </div>
+          </section>
+          
           <!-- Active Agents Panel -->
           <section class="card">
             <header>
@@ -92,6 +106,51 @@
         </section>
       </div>
       
+      <!-- Projects Management Page -->
+      <div id="page-projects-manage" class="page">
+        <header class="page-header">
+          <h1><i class="bi bi-folder"></i> Manage Projects</h1>
+          <button class="primary-btn" onclick="showCreateProjectModal()" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
+            <i class="bi bi-plus-lg"></i> New Project
+          </button>
+        </header>
+        <section class="card full-width">
+          <div id="projects-list" class="projects-grid">
+            <div class="loading"><i class="bi bi-arrow-clockwise spinning"></i> Loading projects...</div>
+          </div>
+        </section>
+      </div>
+      
+      <!-- Create Project Modal -->
+      <div id="create-project-modal" class="modal-overlay" style="display: none;" onclick="closeCreateProjectModal(event)">
+        <div class="modal-content">
+          <header class="modal-header">
+            <h2><i class="bi bi-folder-plus"></i> Create Project</h2>
+            <button class="icon-btn" onclick="closeCreateProjectModal()" title="Close">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </header>
+          <div class="modal-body">
+            <form id="create-project-form" onsubmit="createProject(event)">
+              <div class="form-group">
+                <label for="project-name">Project Name</label>
+                <input type="text" id="project-name" name="name" required placeholder="my-project">
+              </div>
+              <div class="form-group">
+                <label for="project-description">Description</label>
+                <textarea id="project-description" name="description" rows="3" placeholder="What is this project about?"></textarea>
+              </div>
+              <div class="modal-actions">
+                <button type="button" class="secondary-btn" onclick="closeCreateProjectModal()">Cancel</button>
+                <button type="submit" class="primary-btn">
+                  <i class="bi bi-plus-lg"></i> Create Project
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      
       <!-- Gateway Page -->
       <div id="page-gateway" class="page">
         <header class="page-header">
@@ -108,7 +167,25 @@
       <!-- Projects Page -->
       <div id="page-projects" class="page">
         <header class="page-header">
-          <h1><i class="bi bi-kanban"></i> Project Tasks</h1>
+          <div>
+            <h1><i class="bi bi-kanban"></i> Project Tasks</h1>
+            <div class="task-filters">
+              <input type="text" id="task-search" placeholder="Search tasks..." oninput="filterTasks()" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); width: 200px;">
+              <select id="filter-project" onchange="filterTasks()" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
+                <option value="">All Projects</option>
+              </select>
+              <select id="filter-priority" onchange="filterTasks()" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
+                <option value="">All Priorities</option>
+                <option value="urgent">🔴 Urgent</option>
+                <option value="high">🟠 High</option>
+                <option value="medium">🟡 Medium</option>
+                <option value="low">🟢 Low</option>
+              </select>
+              <select id="filter-tags" onchange="filterTasks()" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
+                <option value="">All Tags</option>
+              </select>
+            </div>
+          </div>
           <button class="icon-btn" onclick="loadTasks()" title="Refresh">
             <i class="bi bi-arrow-clockwise"></i>
           </button>
@@ -242,6 +319,108 @@
           </div>
         </div>
       </div>
+      
+      <!-- Task Details Modal -->
+      <div id="task-details-modal" class="modal-overlay" style="display: none;" onclick="closeTaskDetailsModal(event)">
+        <div class="modal-content">
+          <header class="modal-header">
+            <h2><i class="bi bi-info-circle"></i> Task Details</h2>
+            <button class="icon-btn" onclick="closeTaskDetailsModal()" title="Close">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </header>
+          <div class="modal-body">
+            <div id="task-details-content"></div>
+            <div class="modal-actions">
+              <button type="button" class="secondary-btn" onclick="closeTaskDetailsModal()">Close</button>
+              <button type="button" class="primary-btn" id="details-edit-btn">
+                <i class="bi bi-pencil"></i> Edit Task
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Edit Task Modal -->
+      <div id="edit-task-modal" class="modal-overlay" style="display: none;" onclick="closeEditTaskModal(event)">
+        <div class="modal-content">
+          <header class="modal-header">
+            <h2><i class="bi bi-pencil-square"></i> Edit Task</h2>
+            <button class="icon-btn" onclick="closeEditTaskModal()" title="Close">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </header>
+          <div class="modal-body">
+            <form id="edit-task-form" onsubmit="saveTaskEdit(event)">
+              <div class="form-group">
+                <label for="edit-title">Title</label>
+                <input type="text" id="edit-title" name="title" required placeholder="Task title">
+              </div>
+              <div class="form-group">
+                <label for="edit-description">Description</label>
+                <textarea id="edit-description" name="description" rows="3" placeholder="Task description (optional)"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="edit-project">Project</label>
+                <select id="edit-project" name="project" required>
+                  <option value="">Loading...</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="edit-priority">Priority</label>
+                <select id="edit-priority" name="priority">
+                  <option value="">None</option>
+                  <option value="low">🟢 Low</option>
+                  <option value="medium">🟡 Medium</option>
+                  <option value="high">🟠 High</option>
+                  <option value="urgent">🔴 Urgent</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="edit-tags">Tags (comma-separated)</label>
+                <input type="text" id="edit-tags" name="tags" placeholder="bug, feature, urgent">
+              </div>
+              <input type="hidden" id="edit-task-id" value="">
+              <div class="modal-actions">
+                <button type="button" class="secondary-btn" onclick="closeEditTaskModal()">Cancel</button>
+                <button type="submit" class="primary-btn">
+                  <i class="bi bi-check-lg"></i> Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+        <div class="modal-content">
+          <header class="modal-header">
+            <h2><i class="bi bi-play-fill"></i> Start Task</h2>
+            <button class="icon-btn" onclick="closeStartTaskModal()" title="Close">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </header>
+          <div class="modal-body">
+            <div id="start-task-info" class="task-info"></div>
+            <form id="start-task-form" onsubmit="startTaskWithAgent(event)">
+              <div class="form-group">
+                <label for="agent-select">Select Agent</label>
+                <select id="agent-select" name="agentId" required>
+                  <option value="">Choose an agent...</option>
+                  <option value="main">🌙 Main (General tasks)</option>
+                  <option value="coder">👨💻 Coder (Development tasks)</option>
+                  <option value="tasker">🐝 Tasker (Task management)</option>
+                </select>
+              </div>
+              <input type="hidden" id="start-task-id" value="">
+              <div class="modal-actions">
+                <button type="button" class="secondary-btn" onclick="closeStartTaskModal()">Cancel</button>
+                <button type="submit" class="primary-btn">
+                  <i class="bi bi-play-fill"></i> Start Task
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </main>
   </div>
   
@@ -263,9 +442,11 @@
         page = 'sessions';
       } else if (path === '/projects') {
         page = 'projects';
-        loadProjects();
         loadTasks();
         startTasksAutoRefresh();
+      } else if (path === '/projects-manage') {
+        page = 'projects-manage';
+        loadProjectsList();
       } else if (path === '/gateway') {
         page = 'gateway';
       } else {
@@ -275,6 +456,11 @@
       // Show the right page
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.getElementById('page-' + page).classList.add('active');
+      
+      // Load dashboard stats
+      if (page === 'dashboard') {
+        loadStats();
+      }
       
       // Update menu active state
       document.querySelectorAll('.menu a').forEach(a => {
@@ -373,12 +559,15 @@
     
     // Load tasks from API
     let tasksRefreshInterval = null;
+    let allTasks = []; // Store all tasks for filtering
     
     function loadTasks() {
       fetch('/api/tasks')
         .then(r => r.json())
         .then(data => {
-          renderTasks(data.tasks || []);
+          allTasks = data.tasks || [];
+          populateFilterDropdowns();
+          filterTasks(); // Apply current filters
         })
         .catch(err => {
           console.error('Error loading tasks:', err);
@@ -414,6 +603,42 @@
         : done.map(renderTaskCard).join('');
     }
     
+    function populateFilterDropdowns() {
+      // Populate project filter
+      const projects = [...new Set(allTasks.map(t => t.project))];
+      const projectSelect = document.getElementById('filter-project');
+      projectSelect.innerHTML = '<option value="">All Projects</option>' + 
+        projects.map(p => `<option value="${p}">${p}</option>`).join('');
+      
+      // Populate tags filter
+      const allTags = allTasks.flatMap(t => Array.isArray(t.tags) ? t.tags : []);
+      const uniqueTags = [...new Set(allTags)];
+      const tagSelect = document.getElementById('filter-tags');
+      tagSelect.innerHTML = '<option value="">All Tags</option>' + 
+        uniqueTags.map(t => `<option value="${t}">${t}</option>`).join('');
+    }
+    
+    function filterTasks() {
+      const searchTerm = document.getElementById('task-search').value.toLowerCase();
+      const projectFilter = document.getElementById('filter-project').value;
+      const priorityFilter = document.getElementById('filter-priority').value;
+      const tagFilter = document.getElementById('filter-tags').value;
+      
+      const filtered = allTasks.filter(task => {
+        const matchesSearch = !searchTerm || 
+          task.title.toLowerCase().includes(searchTerm) || 
+          (task.description && task.description.toLowerCase().includes(searchTerm));
+        const matchesProject = !projectFilter || task.project === projectFilter;
+        const matchesPriority = !priorityFilter || task.priority === priorityFilter;
+        const taskTags = Array.isArray(task.tags) ? task.tags : [];
+        const matchesTag = !tagFilter || taskTags.includes(tagFilter);
+        
+        return matchesSearch && matchesProject && matchesPriority && matchesTag;
+      });
+      
+      renderTasks(filtered);
+    }
+    
     function renderTaskCard(task) {
       const date = new Date(task.createdAt).toLocaleDateString();
       
@@ -442,26 +667,47 @@
         `;
       }
       
-      // Delete button for all tasks
+      // Edit and delete buttons for all tasks
+      const tagsArray = Array.isArray(task.tags) ? task.tags : [];
+      const tagsHtml = tagsArray.length > 0 ? `
+        <div class="task-tags">
+          ${tagsArray.map(tag => `<span class="tag-chip">${escapeHtml(tag)}</span>`).join('')}
+        </div>
+      ` : '';
+      
+      const editButton = `
+        <button class="task-action-btn edit-btn" onclick="showEditTaskModal('${task.id}', '${escapeHtml(task.title)}', '${escapeHtml(task.description || '')}', '${task.project}', '${task.priority || ''}', '${tagsArray.join(', ')}')" title="Edit task">
+          <i class="bi bi-pencil"></i>
+        </button>
+      `;
+      
       const deleteButton = `
         <button class="task-action-btn delete-btn" onclick="deleteTask('${task.id}')" title="Delete task">
           <i class="bi bi-trash"></i>
         </button>
       `;
       
+      // Priority badge
+      const priorityBadge = task.priority ? `
+        <span class="priority-badge priority-${task.priority}">${task.priority}</span>
+      ` : '';
+      
       return `
         <div class="task-card">
           <div class="task-header">
             <span class="task-id">${task.id}</span>
             <span class="task-project">${task.project}</span>
+            ${priorityBadge}
           </div>
           <div class="task-title">${escapeHtml(task.title)}</div>
           ${task.description ? `<div class="task-description">${escapeHtml(task.description)}</div>` : ''}
+          ${tagsHtml}
           <div class="task-meta">
             <span class="task-date"><i class="bi bi-calendar"></i> ${date}</span>
           </div>
           <div class="task-actions">
             ${actionButtons}
+            ${editButton}
             ${deleteButton}
           </div>
         </div>
@@ -721,6 +967,176 @@
       return div.innerHTML;
     }
     
+    // Dashboard stats
+    async function loadStats() {
+      try {
+        const tasksResponse = await fetch('/api/tasks');
+        const tasksData = await tasksResponse.json();
+        const tasks = tasksData.tasks || [];
+        
+        const total = tasks.length;
+        const todo = tasks.filter(t => t.status === 'todo').length;
+        const inProgress = tasks.filter(t => t.status === 'in-progress').length;
+        const done = tasks.filter(t => t.status === 'done').length;
+        const completionRate = total > 0 ? Math.round((done / total) * 100) : 0;
+        
+        const statsHtml = `
+          <div class="stat-item">
+            <span class="stat-value">${total}</span>
+            <span class="stat-label">Total Tasks</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">${inProgress}</span>
+            <span class="stat-label">In Progress</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">${done}</span>
+            <span class="stat-label">Completed</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">${completionRate}%</span>
+            <span class="stat-label">Completion Rate</span>
+          </div>
+        `;
+        
+        document.getElementById('stats-panel').innerHTML = statsHtml;
+      } catch (err) {
+        console.error('Error loading stats:', err);
+        document.getElementById('stats-panel').innerHTML = 
+          '<div class="error-state"><i class="bi bi-exclamation-triangle"></i><p>Error loading stats</p></div>';
+      }
+    }
+    
+    // Project management functions
+    async function loadProjectsList() {
+      try {
+        const response = await fetch('/api/projects');
+        const data = await response.json();
+        const projects = data.projects || {};
+        
+        const projectList = document.getElementById('projects-list');
+        
+        if (Object.keys(projects).length === 0) {
+          projectList.innerHTML = '<div class="empty-state"><i class="bi bi-inbox"></i><p>No projects yet. Create one!</p></div>';
+          return;
+        }
+        
+        const projectCards = Object.values(projects).map(p => {
+          const taskCount = p.tasks?.length || 0;
+          const created = new Date(p.createdAt).toLocaleDateString();
+          const desc = p.description || 'No description';
+          
+          return `
+            <div class="project-card">
+              <div class="project-header">
+                <h3><i class="bi bi-folder"></i> ${p.name}</h3>
+                <div class="project-actions">
+                  <button class="icon-btn" onclick="editProject('${p.name}')" title="Edit">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <button class="icon-btn" onclick="deleteProject('${p.name}')" title="Delete">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </div>
+              </div>
+              <p class="project-description">${escapeHtml(desc)}</p>
+              <div class="project-meta">
+                <span class="project-stat"><i class="bi bi-list-task"></i> ${taskCount} tasks</span>
+                <span class="project-stat"><i class="bi bi-calendar"></i> ${created}</span>
+              </div>
+              <a href="/projects" class="project-link">View Tasks →</a>
+            </div>
+          `;
+        }).join('');
+        
+        projectList.innerHTML = `<div class="projects-grid">${projectCards}</div>`;
+      } catch (err) {
+        console.error('Error loading projects:', err);
+        document.getElementById('projects-list').innerHTML = 
+          '<div class="error-state"><i class="bi bi-exclamation-triangle"></i><p>Error loading projects</p></div>';
+      }
+    }
+    
+    function showCreateProjectModal() {
+      document.getElementById('create-project-modal').style.display = 'flex';
+    }
+    
+    function closeCreateProjectModal(event) {
+      if (!event || event.target.id === 'create-project-modal') {
+        document.getElementById('create-project-modal').style.display = 'none';
+      }
+    }
+    
+    async function createProject(event) {
+      event.preventDefault();
+      
+      const name = document.getElementById('project-name').value.trim();
+      const description = document.getElementById('project-description').value.trim();
+      
+      try {
+        const response = await fetch('/api/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, description }),
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          closeCreateProjectModal();
+          document.getElementById('create-project-form').reset();
+          loadProjectsList();
+        } else {
+          alert('Error: ' + (result.error || 'Failed to create project'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+    
+    async function editProject(projectName) {
+      const newDescription = prompt('Enter project description:');
+      if (newDescription === null) return;
+      
+      try {
+        const response = await fetch(`/api/projects/${projectName}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ description: newDescription }),
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          loadProjectsList();
+        } else {
+          alert('Error: ' + (result.error || 'Failed to update project'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+    
+    async function deleteProject(projectName) {
+      if (!confirm(`Are you sure you want to delete project "${projectName}"? This cannot be undone.`)) return;
+      
+      try {
+        const response = await fetch(`/api/projects/${projectName}`, {
+          method: 'DELETE',
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          loadProjectsList();
+        } else {
+          alert('Error: ' + (result.error || 'Failed to delete project'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+    
     // Update task status
     async function updateTaskStatus(taskId, newStatus) {
       try {
@@ -756,6 +1172,147 @@
           loadTasks();
         } else {
           alert('Error: ' + (result.error || 'Failed to delete task'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+    
+    // Task details modal
+    async function showTaskDetails(taskId) {
+      try {
+        const task = allTasks.find(t => t.id === taskId);
+        if (!task) return;
+        
+        const created = new Date(task.createdAt).toLocaleString();
+        const updated = task.updatedAt ? new Date(task.updatedAt).toLocaleString() : 'N/A';
+        const started = task.startedAt ? new Date(task.startedAt).toLocaleString() : 'Not started';
+        const completed = task.completedAt ? new Date(task.completedAt).toLocaleString() : 'Not completed';
+        const tags = Array.isArray(task.tags) && task.tags.length > 0 ? task.tags.join(', ') : 'None';
+        
+        const html = `
+          <div class="task-detail-section">
+            <h3><i class="bi bi-card-text"></i> ${escapeHtml(task.title)}</h3>
+            <div class="detail-meta">
+              <span class="detail-badge status-${task.status}">${task.status}</span>
+              ${task.priority ? `<span class="detail-badge priority-${task.priority}">${task.priority}</span>` : ''}
+            </div>
+          </div>
+          
+          <div class="task-detail-section">
+            <h4><i class="bi bi-info-circle"></i> Information</h4>
+            <div class="detail-grid">
+              <div class="detail-item"><strong>ID:</strong> ${task.id}</div>
+              <div class="detail-item"><strong>Project:</strong> ${task.project}</div>
+              <div class="detail-item"><strong>Status:</strong> ${task.status}</div>
+              ${task.priority ? `<div class="detail-item"><strong>Priority:</strong> ${task.priority}</div>` : ''}
+            </div>
+          </div>
+          
+          ${task.description ? `
+          <div class="task-detail-section">
+            <h4><i class="bi bi-chat-left-text"></i> Description</h4>
+            <p class="detail-description">${escapeHtml(task.description)}</p>
+          </div>
+          ` : ''}
+          
+          ${tags !== 'None' ? `
+          <div class="task-detail-section">
+            <h4><i class="bi bi-tags"></i> Tags</h4>
+            <div class="task-tags">${tags.split(', ').map(t => `<span class="tag-chip">${escapeHtml(t)}</span>`).join('')}</div>
+          </div>
+          ` : ''}
+          
+          <div class="task-detail-section">
+            <h4><i class="bi bi-clock-history"></i> Timeline</h4>
+            <div class="detail-grid">
+              <div class="detail-item"><strong>Created:</strong> ${created}</div>
+              <div class="detail-item"><strong>Updated:</strong> ${updated}</div>
+              <div class="detail-item"><strong>Started:</strong> ${started}</div>
+              <div class="detail-item"><strong>Completed:</strong> ${completed}</div>
+            </div>
+          </div>
+        `;
+        
+        document.getElementById('task-details-content').innerHTML = html;
+        document.getElementById('details-edit-btn').onclick = () => {
+          closeTaskDetailsModal();
+          showEditTaskModal(task.id, task.title, task.description || '', task.project, task.priority || '', tags);
+        };
+        document.getElementById('task-details-modal').style.display = 'flex';
+      } catch (err) {
+        console.error('Error loading task details:', err);
+        alert('Error loading task details');
+      }
+    }
+    
+    function closeTaskDetailsModal(event) {
+      if (!event || event.target.id === 'task-details-modal') {
+        document.getElementById('task-details-modal').style.display = 'none';
+      }
+    }
+    
+    // Edit task modal functions
+    async function showEditTaskModal(taskId, title, description, project, priority, tags = '') {
+      document.getElementById('edit-task-id').value = taskId;
+      document.getElementById('edit-title').value = title;
+      document.getElementById('edit-description').value = description;
+      document.getElementById('edit-priority').value = priority;
+      document.getElementById('edit-tags').value = Array.isArray(tags) ? tags.join(', ') : (tags || '');
+      
+      // Load projects into dropdown
+      await loadProjectsForEdit();
+      document.getElementById('edit-project').value = project;
+      
+      document.getElementById('edit-task-modal').style.display = 'flex';
+    }
+    
+    function closeEditTaskModal(event) {
+      if (!event || event.target.id === 'edit-task-modal') {
+        document.getElementById('edit-task-modal').style.display = 'none';
+      }
+    }
+    
+    async function loadProjectsForEdit() {
+      try {
+        const response = await fetch('/api/projects');
+        const data = await response.json();
+        const projects = data.projects || {};
+        
+        const select = document.getElementById('edit-project');
+        select.innerHTML = Object.keys(projects).map(p => 
+          `<option value="${p}">${p}</option>`
+        ).join('');
+      } catch (err) {
+        console.error('Error loading projects:', err);
+      }
+    }
+    
+    async function saveTaskEdit(event) {
+      event.preventDefault();
+      
+      const taskId = document.getElementById('edit-task-id').value;
+      const title = document.getElementById('edit-title').value.trim();
+      const description = document.getElementById('edit-description').value.trim();
+      const project = document.getElementById('edit-project').value;
+      const priority = document.getElementById('edit-priority').value;
+      const tagsInput = document.getElementById('edit-tags').value.trim();
+      const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(t => t) : [];
+      
+      try {
+        const response = await fetch(`/api/tasks/${taskId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, description, project, priority, tags }),
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          closeEditTaskModal();
+          loadTasks();
+        } else {
+          alert('Error: ' + (result.error || 'Failed to update task'));
         }
       } catch (err) {
         alert('Error: ' + err.message);
@@ -1048,6 +1605,303 @@
       background: rgba(248, 81, 73, 0.15);
       border-color: var(--accent-red);
       color: var(--accent-red);
+    }
+    
+    .edit-btn {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid var(--border-color);
+      min-width: auto;
+      flex: none;
+      width: 36px;
+      padding: 0.5rem;
+    }
+    
+    .edit-btn:hover {
+      background: rgba(88, 166, 255, 0.15);
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+    }
+    
+    /* Priority Badges */
+    .priority-badge {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    
+    .priority-low {
+      background: rgba(63, 185, 80, 0.15);
+      color: var(--accent-green);
+    }
+    
+    .priority-medium {
+      background: rgba(210, 153, 34, 0.15);
+      color: var(--accent-yellow);
+    }
+    
+    .priority-high {
+      background: rgba(255, 165, 0, 0.15);
+      color: #ff9f43;
+    }
+    
+    .priority-urgent {
+      background: rgba(248, 81, 73, 0.15);
+      color: var(--accent-red);
+    }
+    
+    /* Textarea styling */
+    textarea {
+      width: 100%;
+      padding: 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      font-size: 0.9rem;
+      font-family: inherit;
+      resize: vertical;
+    }
+    
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+    }
+    
+    /* Projects Grid */
+    .projects-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1.5rem;
+    }
+    
+    .project-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1.25rem;
+      transition: all 0.2s;
+    }
+    
+    .project-card:hover {
+      border-color: var(--accent-blue);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    
+    .project-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    
+    .project-header h3 {
+      margin: 0;
+      font-size: 1.1rem;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .project-header h3 i {
+      color: var(--accent-blue);
+    }
+    
+    .project-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+    
+    .project-description {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      line-height: 1.5;
+      margin: 0.75rem 0;
+      min-height: 3rem;
+    }
+    
+    .project-meta {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border-light);
+    }
+    
+    .project-stat {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+    }
+    
+    .project-stat i {
+      font-size: 0.75rem;
+    }
+    
+    .project-link {
+      display: inline-block;
+      margin-top: 0.75rem;
+      color: var(--accent-blue);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    
+    .project-link:hover {
+      color: #4094e8;
+    }
+    
+    /* Task Filters */
+    .task-filters {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    
+    .task-filters input,
+    .task-filters select {
+      font-size: 0.875rem;
+    }
+    
+    /* Tag Chips */
+    .task-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.375rem;
+      margin: 0.5rem 0;
+    }
+    
+    .tag-chip {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      padding: 0.25rem 0.5rem;
+      border-radius: 999px;
+      background: var(--bg-hover);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-color);
+      text-transform: lowercase;
+    }
+    
+    /* Stats Panel */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+    
+    .stat-item {
+      background: var(--bg-secondary);
+      padding: 1rem;
+      border-radius: 8px;
+      text-align: center;
+    }
+    
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--accent-blue);
+      display: block;
+    }
+    
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 0.25rem;
+      display: block;
+    }
+    
+    /* Task Details Modal */
+    .task-detail-section {
+      margin-bottom: 1.5rem;
+    }
+    
+    .task-detail-section h3 {
+      margin: 0 0 0.75rem 0;
+      font-size: 1.25rem;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .task-detail-section h4 {
+      margin: 0 0 0.5rem 0;
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .detail-meta {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    
+    .detail-badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.25rem 0.625rem;
+      border-radius: 999px;
+      text-transform: uppercase;
+    }
+    
+    .detail-badge.status-todo {
+      background: rgba(139, 148, 158, 0.15);
+      color: var(--text-secondary);
+    }
+    
+    .detail-badge.status-in-progress {
+      background: rgba(210, 153, 34, 0.15);
+      color: var(--accent-yellow);
+    }
+    
+    .detail-badge.status-done {
+      background: rgba(63, 185, 80, 0.15);
+      color: var(--accent-green);
+    }
+    
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+    }
+    
+    .detail-item {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+    
+    .detail-item strong {
+      color: var(--text-primary);
+      display: block;
+      font-size: 0.75rem;
+      margin-bottom: 0.25rem;
+    }
+    
+    .detail-description {
+      background: var(--bg-secondary);
+      padding: 1rem;
+      border-radius: 6px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin: 0;
     }
   </style>
 </body>

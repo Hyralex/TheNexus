@@ -228,6 +228,7 @@ app.post('/api/session/:key/kill', async (c) => {
 // Projects API - read from ~/dev/projects/projects.json
 const PROJECTS_FILE = path.join(process.env.HOME || os.homedir(), 'dev', 'projects', 'projects.json');
 
+// Get all projects
 app.get('/api/projects', async (c) => {
   try {
     if (!fs.existsSync(PROJECTS_FILE)) {
@@ -239,6 +240,111 @@ app.get('/api/projects', async (c) => {
   } catch (error: any) {
     console.error('Error reading projects:', error.message);
     return c.json({ error: error.message, projects: [], activeProject: null });
+  }
+});
+
+// Create project endpoint
+app.post('/api/projects', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { name, description } = body;
+    
+    if (!name) {
+      return c.json({ error: 'Project name is required' }, 400);
+    }
+    
+    const data = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8'));
+    
+    if (data.projects[name]) {
+      return c.json({ error: 'Project already exists' }, 400);
+    }
+    
+    // Create project
+    data.projects[name] = {
+      name,
+      path: path.join(path.dirname(PROJECTS_FILE), name),
+      active: true,
+      createdAt: new Date().toISOString(),
+      description: description || '',
+      tasks: [],
+    };
+    
+    // Create project folder and files
+    fs.mkdirSync(data.projects[name].path, { recursive: true });
+    fs.writeFileSync(path.join(data.projects[name].path, 'context.md'), `# ${name}\n\n${description ? description : ''}\n`);
+    fs.writeFileSync(path.join(data.projects[name].path, 'memory.md'), `# Project Memory - ${name}\n\n`);
+    fs.writeFileSync(path.join(data.projects[name].path, 'sessions.json'), JSON.stringify({ sessions: [] }, null, 2));
+    
+    fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2));
+    
+    return c.json({ success: true, project: data.projects[name] });
+  } catch (error: any) {
+    console.error('Error creating project:', error.message);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+// Update project endpoint
+app.put('/api/projects/:name', async (c) => {
+  try {
+    const projectName = c.req.param('name');
+    const body = await c.req.json();
+    const { description, name: newName } = body;
+    
+    const data = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8'));
+    
+    if (!data.projects[projectName]) {
+      return c.json({ error: 'Project not found' }, 404);
+    }
+    
+    if (description !== undefined) {
+      data.projects[projectName].description = description;
+    }
+    
+    if (newName && newName !== projectName) {
+      // Rename project
+      data.projects[newName] = { ...data.projects[projectName], name: newName };
+      delete data.projects[projectName];
+    }
+    
+    data.projects[projectName || newName].updatedAt = new Date().toISOString();
+    fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2));
+    
+    return c.json({ success: true, project: data.projects[projectName || newName] });
+  } catch (error: any) {
+    console.error('Error updating project:', error.message);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+// Delete project endpoint
+app.delete('/api/projects/:name', async (c) => {
+  try {
+    const projectName = c.req.param('name');
+    const data = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8'));
+    
+    if (!data.projects[projectName]) {
+      return c.json({ error: 'Project not found' }, 404);
+    }
+    
+    // Check if project has tasks
+    if (data.projects[projectName].tasks && data.projects[projectName].tasks.length > 0) {
+      return c.json({ error: 'Cannot delete project with tasks. Remove all tasks first.' }, 400);
+    }
+    
+    // Delete project folder
+    const projectPath = data.projects[projectName].path;
+    if (fs.existsSync(projectPath)) {
+      fs.rmSync(projectPath, { recursive: true });
+    }
+    
+    delete data.projects[projectName];
+    fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2));
+    
+    return c.json({ success: true, message: 'Project deleted' });
+  } catch (error: any) {
+    console.error('Error deleting project:', error.message);
+    return c.json({ error: error.message }, 500);
   }
 });
 
@@ -380,6 +486,77 @@ app.patch('/api/tasks/:id', async (c) => {
 });
 
 // Start task with agent endpoint - spawns a subagent
+// Update task (full edit) endpoint
+app.put('/api/tasks/:id', async (c) => {
+  try {
+    const taskId = c.req.param('id');
+    const body = await c.req.json();
+    const { title, description, project: newProject, priority, tags } = body;
+    
+    if (!fs.existsSync(PROJECTS_FILE)) {
+      return c.json({ error: 'Projects file not found' }, 404);
+    }
+    
+    const data = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8'));
+    
+    // Find the task
+    let found = false;
+    let updatedTask: any = null;
+    let oldProjectName: string | null = null;
+    
+    for (const [projectName, project] of Object.entries(data.projects || {})) {
+      const proj = project as any;
+      if (proj.tasks) {
+        const task = proj.tasks.find((t: any) => t.id === taskId);
+        if (task) {
+          oldProjectName = projectName;
+          
+          // Update fields if provided
+          if (title) task.title = title;
+          if (description !== undefined) task.description = description;
+          if (priority) task.priority = priority;
+          if (tags) task.tags = tags;
+          
+          task.updatedAt = new Date().toISOString();
+          proj.updatedAt = new Date().toISOString();
+          
+          // Handle project change
+          if (newProject && newProject !== projectName) {
+            // Remove from old project
+            const taskIndex = proj.tasks.findIndex((t: any) => t.id === taskId);
+            if (taskIndex !== -1) {
+              const taskData = proj.tasks[taskIndex];
+              proj.tasks.splice(taskIndex, 1);
+              
+              // Add to new project
+              if (data.projects[newProject]) {
+                taskData.project = undefined; // Will be set when reading
+                data.projects[newProject].tasks.push(taskData);
+                data.projects[newProject].updatedAt = new Date().toISOString();
+              }
+            }
+          }
+          
+          updatedTask = { ...task, project: newProject || projectName };
+          found = true;
+          break;
+        }
+      }
+    }
+    
+    if (!found) {
+      return c.json({ error: `Task '${taskId}' not found` }, 404);
+    }
+    
+    fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2));
+    
+    return c.json({ success: true, task: updatedTask });
+  } catch (error: any) {
+    console.error('Error updating task:', error.message);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
 // Delete task endpoint
 app.delete('/api/tasks/:id', async (c) => {
   try {
