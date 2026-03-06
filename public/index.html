@@ -4,47 +4,117 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>The Nexus Dashboard</title>
-  <!-- Pico CSS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-  <!-- Custom styles -->
   <link rel="stylesheet" href="/styles.css">
-  <!-- HTMX -->
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.0/dist/htmx.min.js"></script>
 </head>
 <body>
+  <nav class="container-fluid">
+    <ul>
+      <li><strong>🚀 The Nexus</strong></li>
+    </ul>
+    <ul>
+      <li><a href="/">Dashboard</a></li>
+    </ul>
+  </nav>
+  
   <main class="container">
-    <h1>🚀 The Nexus</h1>
+    <h1>Dashboard</h1>
     
+    <!-- Health Status -->
     <section>
-      <h2>Status</h2>
-      <div id="health-status" hx-get="/api/health" hx-trigger="load, every 5s">
+      <h2>Server Status</h2>
+      <div id="health-status" hx-get="/api/health" hx-trigger="load, every 10s">
         <p>Loading...</p>
       </div>
     </section>
     
+    <!-- Sessions List -->
     <section>
-      <h2>About</h2>
-      <p>Built with <strong>Hono</strong>, <strong>HTMX</strong>, and <strong>Pico CSS</strong>.</p>
-      <p>Running on <strong>Bun</strong> runtime.</p>
+      <header>
+        <h2>Sessions</h2>
+        <button hx-get="/api/sessions" hx-target="#sessions-list" hx-trigger="load, every 30s">
+          ↻ Refresh
+        </button>
+      </header>
+      <div id="sessions-list">
+        <p>Loading sessions...</p>
+      </div>
     </section>
   </main>
   
   <script>
-    // Format health check response
+    // Health status formatter
     htmx.on('htmx:afterSwap', function(evt) {
       if (evt.detail.target.id === 'health-status') {
         const data = JSON.parse(evt.detail.xhr.responseText);
         evt.detail.target.innerHTML = `
           <article>
-            <header>
-              <strong>Status:</strong> ${data.status}
-            </header>
-            <p>Timestamp: ${data.timestamp}</p>
-            <p>Uptime: ${data.uptime.toFixed(2)}s</p>
+            <header><strong>Status:</strong> ${data.status}</header>
+            <p>Uptime: ${data.uptime.toFixed(0)}s</p>
           </article>
         `;
       }
+      
+      // Sessions formatter
+      if (evt.detail.target.id === 'sessions-list') {
+        const data = JSON.parse(evt.detail.xhr.responseText);
+        if (data.error) {
+          evt.detail.target.innerHTML = `<p class="error">Error: ${data.error}</p>`;
+          return;
+        }
+        
+        const sessions = data.sessions || [];
+        if (sessions.length === 0) {
+          evt.detail.target.innerHTML = '<p>No sessions found</p>';
+          return;
+        }
+        
+        const rows = sessions.map(s => {
+          const age = formatAge(s.ageMs);
+          const kind = s.kind || 'direct';
+          const agent = s.agentId || 'main';
+          const model = s.model || 'unknown';
+          const tokens = s.totalTokens?.toLocaleString() || '0';
+          return `
+            <tr>
+              <td><code>${agent}/${kind}</code></td>
+              <td>${model}</td>
+              <td>${tokens}</td>
+              <td>${age}</td>
+            </tr>
+          `;
+        }).join('');
+        
+        evt.detail.target.innerHTML = `
+          <table role="grid">
+            <thead>
+              <tr>
+                <th>Agent/Kind</th>
+                <th>Model</th>
+                <th>Tokens</th>
+                <th>Age</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+          <small>Total: ${sessions.length} sessions</small>
+        `;
+      }
     });
+    
+    function formatAge(ms) {
+      if (!ms) return '?';
+      const mins = Math.floor(ms / 60000);
+      const hours = Math.floor(mins / 60);
+      const days = Math.floor(hours / 24);
+      
+      if (days > 0) return `${days}d`;
+      if (hours > 0) return `${hours}h`;
+      return `${mins}m`;
+    }
   </script>
 </body>
 </html>
