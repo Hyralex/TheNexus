@@ -1,0 +1,17 @@
+{
+  "name": "nexus",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "build": "echo 'No build step required - using Bun runtime'",
+    "start": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "hono": "^4.3.0"
+  },
+  "devDependencies": {
+    "bun-types": "^1.1.0",
+    "typescript": "^5.4.0"
+  }
+}

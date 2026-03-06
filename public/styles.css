@@ -1,0 +1,27 @@
+/* Custom styles for Nexus Dashboard */
+
+main.container {
+  padding-top: 2rem;
+  max-width: 800px;
+}
+
+h1 {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+section {
+  margin-bottom: 2rem;
+}
+
+#health-status article {
+  background: var(--pico-card-background-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  padding: 1rem;
+}
+
+#health-status header {
+  margin-bottom: 0.5rem;
+  font-size: 1.1rem;
+}

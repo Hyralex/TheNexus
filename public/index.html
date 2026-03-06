@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus Dashboard</title>
+  <!-- Pico CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <!-- Custom styles -->
+  <link rel="stylesheet" href="/styles.css">
+  <!-- HTMX -->
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.0/dist/htmx.min.js"></script>
+</head>
+<body>
+  <main class="container">
+    <h1>🚀 Nexus Dashboard</h1>
+    
+    <section>
+      <h2>Status</h2>
+      <div id="health-status" hx-get="/api/health" hx-trigger="load, every 5s">
+        <p>Loading...</p>
+      </div>
+    </section>
+    
+    <section>
+      <h2>About</h2>
+      <p>Built with <strong>Hono</strong>, <strong>HTMX</strong>, and <strong>Pico CSS</strong>.</p>
+      <p>Running on <strong>Bun</strong> runtime.</p>
+    </section>
+  </main>
+  
+  <script>
+    // Format health check response
+    htmx.on('htmx:afterSwap', function(evt) {
+      if (evt.detail.target.id === 'health-status') {
+        const data = JSON.parse(evt.detail.xhr.responseText);
+        evt.detail.target.innerHTML = `
+          <article>
+            <header>
+              <strong>Status:</strong> ${data.status}
+            </header>
+            <p>Timestamp: ${data.timestamp}</p>
+            <p>Uptime: ${data.uptime.toFixed(2)}s</p>
+          </article>
+        `;
+      }
+    });
+  </script>
+</body>
+</html>
