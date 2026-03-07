@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -786,7 +786,7 @@ app.delete('/api/tasks/:id', async (c) => {
   }
 });
 
-// New /api/tasks/start endpoint with Tasker integration
+// New /api/tasks/start endpoint - directly spawn selected agent asynchronously
 app.post('/api/tasks/start', async (c) => {
   try {
     const body = await c.req.json();
@@ -796,6 +796,9 @@ app.post('/api/tasks/start', async (c) => {
       return c.json({ error: 'taskId is required' }, 400);
     }
     
+    if (!agentId) {
+      return c.json({ error: 'agentId is required' }, 400);
+    }
     
     if (!fs.existsSync(PROJECTS_FILE)) {
       return c.json({ error: 'Projects file not found' }, 404);
@@ -823,49 +826,154 @@ app.post('/api/tasks/start', async (c) => {
     if (!task) {
       return c.json({ error: `Task '${taskId}' not found` }, 404);
     }
-        
-    const taskNum = taskId.split('-')[1];
-   
-    const { execSync } = await import('child_process');
     
-    console.log(`Waking up @Tasker...`);
+    const { exec } = await import('child_process');
     
-    try {
-      const idempotencyKey = `task-${taskId}-${Date.now()}`;
-      const params = JSON.stringify({
-        sessionKey: 'agent:tasker:discord:channel:1479759400024539217',
-        message: `🎯 **Start Task: task-${taskNum}**
+    console.log(`🚀 Spawning agent ${agentId} for task ${taskId}...`);
+    
+    // Build the task message for the agent
+    const taskMessage = `🎯 **Task Assignment: ${task.id}**
 
 **Project:** ${projectName}
 **Title:** ${task.title}
+**Description:** ${task.description || 'No description provided'}
 
-Please spawn the appropriate specialist agent to complete this task.`,
-        idempotencyKey: idempotencyKey,
-      });
-      
-      execSync(
-        `openclaw gateway call chat.send --params '${params.replace(/'/g, "'\\''")}'`,
-        { encoding: 'utf-8', timeout: 30000 }
-      );
-      
-      console.log(`✅ @Tasker woken up for task ${taskId}`);
-    } catch (wakeError: any) {
-      console.error('⚠️ Failed to wake Tasker:', wakeError.message);
-    }
-    
-    // Update task status
+**Instructions:**
+1. Work on this task in the current session
+2. When finished, mark the task as done: pm task done ${taskId} --project ${projectName}
+3. Post a summary of what you accomplished
+
+Start working on this task now.`;
+
+    // Update task status immediately (don't wait for agent)
     task.status = 'in-progress';
     task.startedAt = new Date().toISOString();
     task.updatedAt = new Date().toISOString();
+    task.assignedAgent = agentId;
     
     // Save project data
     const proj = data.projects[projectName!] as any;
     proj.updatedAt = new Date().toISOString();
     fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2) + '\n');
     
+    // Find existing Discord channel session for this agent
+    // This ensures we route through the channel-bound session, not DMs
+    let sessionArg = `--agent ${agentId}`;
+    try {
+      const { stdout: sessionsOut } = await execAsync('openclaw sessions --all-agents --json', {
+        env: { ...process.env, FORCE_COLOR: '0' },
+      });
+      const sessionsData = JSON.parse(sessionsOut);
+      
+      // Look for Discord channel sessions for this agent
+      // Session key format: agent:<agentId>:discord:channel:<channelId>
+      const discordSession = sessionsData.sessions?.find((s: any) => 
+        s.agentId === agentId && 
+        s.key && 
+        s.key.includes('discord:channel:')
+      );
+      
+      if (discordSession?.sessionId) {
+        console.log(`📌 Found existing Discord session for ${agentId}: ${discordSession.key}`);
+        sessionArg = `--session-id ${discordSession.sessionId}`;
+      } else {
+        console.log(`⚠️ No existing Discord session for ${agentId}, using --agent fallback`);
+      }
+    } catch (sessionError: any) {
+      console.warn(`⚠️ Could not lookup sessions: ${sessionError.message}`);
+      console.warn(`   Falling back to --agent ${agentId}`);
+    }
+    
+    // Build enhanced task message with project-manager skill instructions
+    const enhancedTaskMessage = `🎯 **Task Assignment: ${task.id}**
+
+**Project:** ${projectName}
+**Title:** ${task.title}
+**Description:** ${task.description || 'No description provided'}
+
+## Project Manager Skill Instructions
+
+You are working on a task from the **Project Manager** system. Follow these steps:
+
+1. **Spawn a subagent in a Discord thread** to do the actual work:
+   - Use \`sessions_spawn\` with \`thread: true\` and \`mode: "session"\`
+   - Pass the full task description to the subagent
+   - Include instructions to run \`pm task complete ${task.id} --project ${projectName}\` when done
+
+2. **Monitor the subagent** - it will announce back when complete
+
+3. **Verify the task is marked done** in the project kanban
+
+## Example Spawn Command
+
+\`\`\`typescript
+sessions_spawn({
+  task: \`
+**Task ${task.id}:** "${task.title}"
+
+**Full Description:**
+${task.description || 'No description provided'}
+
+## Project Context
+**Project:** ${projectName}
+**Task ID:** ${task.id}
+
+## When Finished
+Run: pm task complete ${task.id} --project ${projectName} --message "summary of what you built"
+\`,
+  thread: true,
+  mode: "session",
+  label: "${task.id}-worker"
+})
+\`\`\`
+
+**Important:** The subagent needs explicit instructions about the pm CLI and how to complete the task.
+
+Start working on this task now.`;
+
+    // Spawn agent asynchronously in background (don't wait for response)
+    // Use execFile to avoid shell escaping issues with special characters
+    const execFileAsync = promisify(execFile);
+    
+    // Parse sessionArg to extract command and args
+    const args: string[] = ['agent'];
+    if (sessionArg.startsWith('--session-id')) {
+      const sessionId = sessionArg.split(' ')[1];
+      args.push('--session-id', sessionId);
+    } else if (sessionArg.startsWith('--agent')) {
+      const agentId = sessionArg.split(' ')[1];
+      args.push('--agent', agentId);
+    }
+    args.push('--message', enhancedTaskMessage);
+    
+    execFileAsync('openclaw', args, {
+      timeout: 300000, // 5 minute timeout for agent to start
+    }).then(({ stdout, stderr }) => {
+      console.log(`✅ Agent ${agentId} spawned for task ${taskId}`);
+      console.log(`   Output: ${stdout.substring(0, 200)}...`);
+      
+      // Extract session key from output if available
+      const sessionKeyMatch = stdout.match(/session[:\s]+([^\s]+)/i);
+      const sessionKey = sessionKeyMatch ? sessionKeyMatch[1] : 'N/A';
+      
+      if (sessionKey && sessionKey !== 'N/A') {
+        task.sessionKey = sessionKey;
+        fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2) + '\n');
+      }
+    }).catch((spawnError: any) => {
+      console.error(`⚠️ Agent spawn error for task ${taskId}:`, spawnError.message);
+      // Mark task as failed if agent couldn't start
+      task.status = 'todo';
+      task.assignedAgent = null;
+      fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2) + '\n');
+    });
+    
+    // Return immediately - agent runs in background
     return c.json({ 
       success: true, 
-      message: `Task ${taskId} sent to @Tasker for orchestration`,
+      message: `Task ${taskId} started with agent ${agentId}`,
+      agentId: agentId,
+      status: 'in-progress',
     });
     
   } catch (error: any) {
