@@ -21,6 +21,31 @@ let activityLog: Array<{
   message: string;
 }> = [];
 
+// Refinement status tracking (task ID -> status)
+const refinementStatus = new Map<string, {
+  status: 'pending' | 'completed' | 'failed';
+  startedAt: string;
+  completedAt?: string;
+  error?: string;
+}>();
+
+// Cleanup old refinement statuses (keep last 24 hours)
+setInterval(() => {
+  const now = Date.now();
+  const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+  
+  for (const [taskId, status] of refinementStatus.entries()) {
+    const completedAt = status.completedAt ? new Date(status.completedAt).getTime() : 0;
+    const startedAt = new Date(status.startedAt).getTime();
+    const age = completedAt > 0 ? now - completedAt : now - startedAt;
+    
+    if (age > maxAge) {
+      refinementStatus.delete(taskId);
+      console.log(`🧹 Cleaned up old refinement status for ${taskId}`);
+    }
+  }
+}, 60 * 60 * 1000); // Run every hour
+
 // Page routes - serve index.html for SPA routing
 app.get('/', (c) => {
   return c.html(fs.readFileSync('./public/index.html', 'utf-8'));
@@ -381,59 +406,6 @@ app.get('/api/tasks', async (c) => {
   }
 });
 
-// Refinement logic - enriches task descriptions with context
-async function refineTaskDescription(title: string, description: string, project: string): Promise<string> {
-  try {
-    console.log(`🤖 Spawning refinement agent for task: "${title}"`);
-    
-    // For now, use a placeholder that indicates agent-based refinement is needed
-    // TODO: Implement proper agent-based refinement using sessions_spawn API
-    // This will be replaced with actual subagent spawning that:
-    // 1. Reads /home/azureuser/dev/projects/${project}/AGENTS.md
-    // 2. Reads /home/azureuser/dev/projects/${project}/context.md  
-    // 3. Enriches the task description with project-specific context
-    // 4. Returns the refined description
-    
-    const refinementNote = `⚠️ **Awaiting Product Manager Agent Refinement**
-
-This task has been queued for automatic refinement by a Product Manager agent.
-
-**Original Task:**
-- Title: ${title}
-- Description: ${description || '(none provided)'}
-- Project: ${project}
-
-**What happens next:**
-1. A Product Manager agent will read this task
-2. The agent will review project context (AGENTS.md, context.md)
-3. The agent will enrich this description with:
-   - Clear objectives
-   - Project-specific context
-   - Technical approach
-   - Files to modify
-   - Acceptance criteria
-   - Dependencies
-   - Potential pitfalls
-
-**Status:** Pending refinement (auto-refinement in progress)
-
----
-
-*This task will be automatically updated once the Product Manager agent completes refinement.*`;
-
-    console.log(`✅ Task queued for refinement: "${title}"`);
-    
-    // TODO: Spawn subagent asynchronously to refine this task
-    // The subagent will update the task description via API call
-    // For now, return the placeholder note
-    
-    return refinementNote;
-  } catch (error: any) {
-    console.error('❌ Error in task refinement:', error.message);
-    return description || title;
-  }
-}
-
 
 // Update task endpoint (used by refinement agent)
 app.put('/api/tasks/:id', async (c) => {
@@ -581,7 +553,22 @@ app.post('/api/tasks', async (c) => {
     // Spawn refinement agent asynchronously (don't wait)
     if (!shouldSkipRefinement) {
       console.log(`🔄 Spawning refinement agent for task: ${taskId} - "${title}"`);
-      spawnRefinementAgent(taskId, title, description || '', project);
+      // Track refinement status
+      refinementStatus.set(taskId, {
+        status: 'pending',
+        startedAt: new Date().toISOString(),
+      });
+      spawnRefinementAgent(taskId, title, description || '', project, (success, error) => {
+        // Update status when refinement completes
+        const status = refinementStatus.get(taskId);
+        if (status) {
+          status.status = success ? 'completed' : 'failed';
+          status.completedAt = new Date().toISOString();
+          if (error) status.error = error;
+          refinementStatus.set(taskId, status);
+        }
+        console.log(`✅ Refinement ${success ? 'completed' : 'failed'} for task ${taskId}`);
+      });
     }
     
     // Add task to project
@@ -664,6 +651,37 @@ app.post('/api/tasks/:id/refine', async (c) => {
     console.error('Error refining task:', error.message);
     return c.json({ error: error.message }, 500);
   }
+});
+
+// Get refinement status endpoint
+app.get('/api/refinement/:id', async (c) => {
+  const taskId = c.req.param('id');
+  const status = refinementStatus.get(taskId);
+  
+  if (!status) {
+    return c.json({ error: 'No refinement status found for this task', taskId }, 404);
+  }
+  
+  return c.json({
+    taskId,
+    ...status,
+  });
+});
+
+// Get all refinement statuses endpoint
+app.get('/api/refinement', async (c) => {
+  const allStatuses = Array.from(refinementStatus.entries()).map(([taskId, status]) => ({
+    taskId,
+    ...status,
+  }));
+  
+  return c.json({
+    total: allStatuses.length,
+    pending: allStatuses.filter(s => s.status === 'pending').length,
+    completed: allStatuses.filter(s => s.status === 'completed').length,
+    failed: allStatuses.filter(s => s.status === 'failed').length,
+    refinements: allStatuses,
+  });
 });
 
 // Update task status endpoint
