@@ -817,7 +817,12 @@ app.post('/api/tasks/start', async (c) => {
       const idempotencyKey = `task-${taskId}-${Date.now()}`;
       const params = JSON.stringify({
         sessionKey: 'agent:tasker:discord:channel:1479759400024539217',
-        message: `Start task: task-${taskNum}`,
+        message: `🎯 **Start Task: task-${taskNum}**
+
+**Project:** ${projectName}
+**Title:** ${task.title}
+
+Please spawn the appropriate specialist agent to complete this task.`,
         idempotencyKey: idempotencyKey,
       });
       

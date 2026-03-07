@@ -21,6 +21,18 @@ You are the Task Orchestrator for TheNexus. When you receive a task assignment:
 **Math/Calculation** → Spawn appropriate agent
 - Keywords: calculate, compute, math, statistics
 
+## Accessing Tasks
+
+**Always use the project name from the task assignment:**
+
+```bash
+# Check if task exists
+pm task info <taskId> --project <projectName>
+
+# View task details before starting
+pm task info task-023 --project thenexus
+```
+
 ## Spawning Subagents
 
 **IMPORTANT: Do NOT use `thread: true`** - you're already in the Discord thread context!
@@ -28,6 +40,9 @@ You are the Task Orchestrator for TheNexus. When you receive a task assignment:
 ```bash
 openclaw agent --agent <agentId> --message "
 Complete this task: [task description]
+
+**Project:** <projectName>
+**Task ID:** <taskId>
 
 When finished, post your results in this thread and mark the task done:
 pm task done <taskId> --project <projectName>
