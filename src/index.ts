@@ -892,17 +892,25 @@ ${shortDesc}
 
 Please spawn the appropriate agent now.`;
 
-    // Spawn Tasker as a subagent to handle orchestration
-    console.log(`Spawning @Tasker as subagent...`);
+    // Wake up Tasker by sending message to its session
+    console.log(`Waking up @Tasker...`);
     
     try {
+      const idempotencyKey = `task-${taskId}-${Date.now()}`;
+      const params = JSON.stringify({
+        sessionKey: 'agent:tasker:discord:channel:1479675058514563192',
+        message: taskerTask,
+        idempotencyKey: idempotencyKey,
+      });
+      
       execSync(
-        `openclaw agent --agent tasker --message "${taskerTask.replace(/"/g, '\\"').replace(/\n/g, '\\n')}" &`,
-        { encoding: 'utf-8', timeout: 10000, stdio: 'ignore' }
+        `openclaw gateway call chat.send --params '${params.replace(/'/g, "'\\''")}'`,
+        { encoding: 'utf-8', timeout: 30000 }
       );
-      console.log(`✅ @Tasker spawned to orchestrate task ${taskId}`);
-    } catch (spawnError: any) {
-      console.error('⚠️ Failed to spawn Tasker:', spawnError.message);
+      
+      console.log(`✅ @Tasker woken up for task ${taskId}`);
+    } catch (wakeError: any) {
+      console.error('⚠️ Failed to wake Tasker:', wakeError.message);
     }
     
     // Save project data
