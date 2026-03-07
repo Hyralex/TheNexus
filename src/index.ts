@@ -779,6 +779,10 @@ app.post('/api/tasks/start', async (c) => {
       return c.json({ error: 'taskId is required' }, 400);
     }
     
+    // TESTING RULE: Default to testproject unless explicitly specified
+    // NEVER test in thenexus - it's the production project
+    const testProject = project || 'testproject';
+    
     if (!fs.existsSync(PROJECTS_FILE)) {
       return c.json({ error: 'Projects file not found' }, 404);
     }
@@ -809,7 +813,15 @@ app.post('/api/tasks/start', async (c) => {
     // Step 1: Create Discord thread in #task forum
     console.log(`Creating Discord thread for task ${taskId}...`);
     
-    const threadTitle = `task-${taskId.split('-')[1]}: ${task.title.substring(0, 50)}`;
+    const taskNum = taskId.split('-')[1];
+    const shortTitle = task.title.substring(0, 40);
+    const threadTitle = `task-${taskNum}: ${shortTitle}`;
+    
+    // Truncate description for Discord (max 200 chars)
+    const shortDesc = task.description 
+      ? task.description.replace(/[#*`\[\]]/g, '').substring(0, 200) + '...' 
+      : '(No description)';
+    
     const threadMessage = `🎯 **New Task: ${task.title}**
 
 **Task ID:** ${taskId}
@@ -818,11 +830,11 @@ app.post('/api/tasks/start', async (c) => {
 **Tags:** ${Array.isArray(task.tags) ? task.tags.join(', ') : 'none'}
 
 **Description:**
-${task.description || '(No description provided)'}
+${shortDesc}
 
 ---
 
-@Tasker please analyze this task and spawn the appropriate specialist agent to complete it.`;
+@Tasker please analyze and spawn appropriate agent.`;
 
     const { execSync } = await import('child_process');
     const threadResult = execSync(
