@@ -779,9 +779,6 @@ app.post('/api/tasks/start', async (c) => {
       return c.json({ error: 'taskId is required' }, 400);
     }
     
-    // TESTING RULE: Default to testproject unless explicitly specified
-    // NEVER test in thenexus - it's the production project
-    const testProject = project || 'testproject';
     
     if (!fs.existsSync(PROJECTS_FILE)) {
       return c.json({ error: 'Projects file not found' }, 404);
@@ -809,97 +806,18 @@ app.post('/api/tasks/start', async (c) => {
     if (!task) {
       return c.json({ error: `Task '${taskId}' not found` }, 404);
     }
-    
-    // Step 1: Create Discord thread in #task forum
-    console.log(`Creating Discord thread for task ${taskId}...`);
-    
+        
     const taskNum = taskId.split('-')[1];
-    const shortTitle = task.title.substring(0, 40);
-    const threadTitle = `task-${taskNum}: ${shortTitle}`;
-    
-    // Truncate description for Discord (max 200 chars)
-    const shortDesc = task.description 
-      ? task.description.replace(/[#*`\[\]]/g, '').substring(0, 200) + '...' 
-      : '(No description)';
-    
-    const threadMessage = `🎯 **New Task: ${task.title}**
-
-**Task ID:** ${taskId}
-**Project:** ${projectName}
-**Priority:** ${task.priority || 'normal'}
-**Tags:** ${Array.isArray(task.tags) ? task.tags.join(', ') : 'none'}
-
-**Description:**
-${shortDesc}
-
----
-
-@Tasker please analyze and spawn appropriate agent.`;
-
+   
     const { execSync } = await import('child_process');
-    const threadResult = execSync(
-      `openclaw message thread create ` +
-      `--channel discord ` +
-      `--target channel:1479614759916667051 ` +
-      `--thread-name "${threadTitle.replace(/"/g, '\\"')}" ` +
-      `--message "${threadMessage.replace(/"/g, '\\"')}" ` +
-      `--json`,
-      { encoding: 'utf-8', timeout: 30000 }
-    );
     
-    const threadData = JSON.parse(threadResult);
-    const threadId = threadData.payload?.thread?.id;
-    
-    if (!threadId) {
-      throw new Error('Failed to create Discord thread');
-    }
-    
-    console.log(`✅ Discord thread created: ${threadId}`);
-    
-    // Step 2: Store thread metadata in task
-    task.discordThreadId = threadId;
-    task.discordThreadUrl = `https://discord.com/channels/1474992983727407214/${threadId}`;
-    task.status = 'in-progress';
-    task.startedAt = new Date().toISOString();
-    task.updatedAt = new Date().toISOString();
-    
-    console.log(`✅ Discord thread created for task ${taskId}: ${threadId}`);
-    
-    // Step 2: Send task to Tasker via sessions_send (more reliable than Discord)
-    console.log(`Sending task to @Tasker via sessions_send...`);
-    
-    const taskerTask = `🎯 **New Task Assignment**
-
-**Task ID:** ${taskId}
-**Title:** ${task.title}
-**Project:** ${projectName}
-**Priority:** ${task.priority || 'normal'}
-**Tags:** ${Array.isArray(task.tags) ? task.tags.join(', ') : 'none'}
-
-**Discord Thread:** <#${threadId}>
-**Thread URL:** https://discord.com/channels/1474992983727407214/${threadId}
-
-**Description:**
-${shortDesc}
-
----
-
-**INSTRUCTIONS:**
-1. Analyze this task type (coding/research/writing/etc.)
-2. Spawn the appropriate specialist subagent with thread: true
-3. The subagent should be bound to the Discord thread above
-4. Monitor for completion and ensure task is marked done
-
-Please spawn the appropriate agent now.`;
-
-    // Wake up Tasker by sending message to its session
     console.log(`Waking up @Tasker...`);
     
     try {
       const idempotencyKey = `task-${taskId}-${Date.now()}`;
       const params = JSON.stringify({
-        sessionKey: 'agent:tasker:discord:channel:1479675058514563192',
-        message: taskerTask,
+        sessionKey: 'agent:tasker:discord:channel:1479759400024539217',
+        message: `Start task: task-${taskNum}`,
         idempotencyKey: idempotencyKey,
       });
       
@@ -913,6 +831,11 @@ Please spawn the appropriate agent now.`;
       console.error('⚠️ Failed to wake Tasker:', wakeError.message);
     }
     
+    // Update task status
+    task.status = 'in-progress';
+    task.startedAt = new Date().toISOString();
+    task.updatedAt = new Date().toISOString();
+    
     // Save project data
     const proj = data.projects[projectName!] as any;
     proj.updatedAt = new Date().toISOString();
@@ -921,8 +844,6 @@ Please spawn the appropriate agent now.`;
     return c.json({ 
       success: true, 
       message: `Task ${taskId} sent to @Tasker for orchestration`,
-      discordThreadId: threadId,
-      discordThreadUrl: task.discordThreadUrl,
     });
     
   } catch (error: any) {
