@@ -454,7 +454,8 @@ app.put('/api/tasks/:id', async (c) => {
           }
           
           // Clear refinement flag when task is manually edited (description changed)
-          if (description !== undefined && task.refined === true) {
+          // BUT NOT if this update is setting refined: true (i.e., refinement completion)
+          if (description !== undefined && task.refined === true && refined !== true) {
             task.refined = false;
             task.refinedAt = null;
             task.refinedBy = null;

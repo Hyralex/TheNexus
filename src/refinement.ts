@@ -135,18 +135,52 @@ export async function spawnRefinementAgent(
     const promptTemplate = loadRefinementPrompt();
     const refinementPrompt = interpolatePrompt(promptTemplate, { taskId, title, description, project });
     
-    // Spawn subagent and capture its output
-    const command = `openclaw agent --agent coder --message "${refinementPrompt.replace(/"/g, '\\"')}"`;
+    // Use JSON output for clean parsing (filters out gateway status messages)
+    const command = `openclaw agent --agent coder --message "${refinementPrompt.replace(/"/g, '\\"')}" --json`;
     
     console.log(`✓ Refinement agent spawned for task ${taskId}`);
     
     // Execute and capture output
-    const { stdout } = await execAsync(command, { timeout: 60000 });
+    const { stdout } = await execAsync(command, { timeout: 120000 }); // 2 minute timeout
     
-    // The agent's output IS the refined description
-    const refinedDescription = stdout.trim();
+    // Parse JSON output to extract the message text
+    let refinedDescription = '';
+    try {
+      const result = JSON.parse(stdout);
+      // Extract text from the nested JSON structure: result.payloads[0].text
+      if (result.result?.payloads?.[0]?.text) {
+        refinedDescription = result.result.payloads[0].text;
+      } else if (result.message) {
+        refinedDescription = result.message;
+      } else if (result.output) {
+        refinedDescription = result.output;
+      } else {
+        console.warn(`⚠️ Unexpected JSON structure: ${JSON.stringify(result).substring(0, 200)}...`);
+        refinedDescription = stdout;
+      }
+    } catch (parseError: any) {
+      console.warn(`⚠️ JSON parse error: ${parseError.message}`);
+      // Fallback: use stdout directly if not JSON
+      refinedDescription = stdout.trim();
+    }
     
-    if (refinedDescription) {
+    // Filter out any gateway/cli status lines (lines starting with special chars or keywords)
+    const lines = refinedDescription.split('\n');
+    const cleanLines = lines.filter(line => {
+      const trimmed = line.trim();
+      // Keep lines that look like markdown content
+      return trimmed && 
+             !trimmed.startsWith('Gateway') && 
+             !trimmed.startsWith('🦞') &&
+             !trimmed.startsWith('Error:') &&
+             !trimmed.startsWith('Config:') &&
+             !trimmed.startsWith('Source:') &&
+             !trimmed.startsWith('Bind:') &&
+             trimmed !== 'Process exited with code 0.';
+    });
+    refinedDescription = cleanLines.join('\n').trim();
+    
+    if (refinedDescription && refinedDescription.length > 50) {
       // Update the task via API - include project to avoid ID collisions
       const updateCommand = `curl -s -X PUT "http://localhost:3000/api/tasks/${taskId}?project=${project}" \\
         -H "Content-Type: application/json" \\
@@ -160,13 +194,16 @@ export async function spawnRefinementAgent(
       await execAsync(updateCommand);
       
       console.log(`✅ Task ${taskId} refined successfully in project ${project}`);
+      console.log(`   Description length: ${refinedDescription.length} chars`);
       callback?.(true);
     } else {
-      console.warn(`⚠️ Refinement agent returned empty output for task ${taskId}`);
-      callback?.(false, 'Empty refinement output');
+      console.warn(`⚠️ Refinement agent returned empty or too-short output for task ${taskId}`);
+      console.log(`   Output preview: ${refinedDescription.substring(0, 100)}...`);
+      callback?.(false, 'Empty or insufficient refinement output');
     }
   } catch (error: any) {
     console.error(`❌ Error in refinement for task ${taskId}:`, error.message);
+    console.error(`   Stack:`, error.stack);
     callback?.(false, error.message);
   }
 }
