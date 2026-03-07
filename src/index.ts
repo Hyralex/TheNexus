@@ -551,14 +551,12 @@ app.post('/api/tasks', async (c) => {
       return c.json({ error: `Project '${project}' not found` }, 404);
     }
     
-    // Generate task ID - find the highest existing task number and increment
+    // Generate globally unique task ID
+    const globalCounter = data.globalTaskCounter || 0;
+    const taskId = `task-${String(globalCounter + 1).padStart(3, '0')}`;
+    data.globalTaskCounter = globalCounter + 1;
+    
     const proj = data.projects[project] as any;
-    const existingTasks = proj.tasks || [];
-    const maxTaskNum = existingTasks.reduce((max: number, task: any) => {
-      const num = parseInt(task.id.replace('task-', ''), 10);
-      return num > max ? num : max;
-    }, 0);
-    const taskId = `task-${String(maxTaskNum + 1).padStart(3, '0')}`;
     
     // Check if refinement should be skipped
     const shouldSkipRefinement = skipRefinement === true;
