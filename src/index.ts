@@ -864,7 +864,46 @@ ${shortDesc}
     task.updatedAt = new Date().toISOString();
     
     console.log(`✅ Discord thread created for task ${taskId}: ${threadId}`);
-    console.log(`⏳ Waiting for @Tasker to spawn subagent...`);
+    
+    // Step 2: Send task to Tasker via sessions_send (more reliable than Discord)
+    console.log(`Sending task to @Tasker via sessions_send...`);
+    
+    const taskerTask = `🎯 **New Task Assignment**
+
+**Task ID:** ${taskId}
+**Title:** ${task.title}
+**Project:** ${projectName}
+**Priority:** ${task.priority || 'normal'}
+**Tags:** ${Array.isArray(task.tags) ? task.tags.join(', ') : 'none'}
+
+**Discord Thread:** <#${threadId}>
+**Thread URL:** https://discord.com/channels/1474992983727407214/${threadId}
+
+**Description:**
+${shortDesc}
+
+---
+
+**INSTRUCTIONS:**
+1. Analyze this task type (coding/research/writing/etc.)
+2. Spawn the appropriate specialist subagent with thread: true
+3. The subagent should be bound to the Discord thread above
+4. Monitor for completion and ensure task is marked done
+
+Please spawn the appropriate agent now.`;
+
+    // Spawn Tasker as a subagent to handle orchestration
+    console.log(`Spawning @Tasker as subagent...`);
+    
+    try {
+      execSync(
+        `openclaw agent --agent tasker --message "${taskerTask.replace(/"/g, '\\"').replace(/\n/g, '\\n')}" &`,
+        { encoding: 'utf-8', timeout: 10000, stdio: 'ignore' }
+      );
+      console.log(`✅ @Tasker spawned to orchestrate task ${taskId}`);
+    } catch (spawnError: any) {
+      console.error('⚠️ Failed to spawn Tasker:', spawnError.message);
+    }
     
     // Save project data
     const proj = data.projects[projectName!] as any;
