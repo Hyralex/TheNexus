@@ -769,13 +769,14 @@ app.delete('/api/tasks/:id', async (c) => {
   }
 });
 
+// New /api/tasks/start endpoint with Tasker integration
 app.post('/api/tasks/start', async (c) => {
   try {
     const body = await c.req.json();
     const { taskId, agentId, project } = body;
     
-    if (!taskId || !agentId) {
-      return c.json({ error: 'taskId and agentId are required' }, 400);
+    if (!taskId) {
+      return c.json({ error: 'taskId is required' }, 400);
     }
     
     if (!fs.existsSync(PROJECTS_FILE)) {
@@ -784,7 +785,7 @@ app.post('/api/tasks/start', async (c) => {
     
     const data = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8'));
     
-    // Find the task across all projects
+    // Find the task
     let task: any = null;
     let projectName: string | null = null;
     
@@ -793,10 +794,7 @@ app.post('/api/tasks/start', async (c) => {
       if (proj.tasks) {
         const foundTask = proj.tasks.find((t: any) => t.id === taskId);
         if (foundTask) {
-          // If project filter is provided, only match if it's the right project
-          if (project && name !== project) {
-            continue;
-          }
+          if (project && name !== project) continue;
           task = foundTask;
           projectName = name;
           break;
@@ -808,109 +806,71 @@ app.post('/api/tasks/start', async (c) => {
       return c.json({ error: `Task '${taskId}' not found` }, 404);
     }
     
-    // Build comprehensive task brief for the subagent
-    const priority = task.priority || 'none';
-    const tags = Array.isArray(task.tags) ? task.tags.join(', ') : (task.tags || 'none');
-    const refined = task.refined ? 'Yes' : 'No';
-    const projectPath = `/home/azureuser/dev/projects/${projectName}/`;
+    // Step 1: Create Discord thread in #task forum
+    console.log(`Creating Discord thread for task ${taskId}...`);
     
-    const taskBrief = `## Task Assignment: ${task.title}
+    const threadTitle = `task-${taskId.split('-')[1]}: ${task.title.substring(0, 50)}`;
+    const threadMessage = `🎯 **New Task: ${task.title}**
 
 **Task ID:** ${taskId}
 **Project:** ${projectName}
-**Priority:** ${priority}
-**Tags:** ${tags}
-**Refined:** ${refined}
+**Priority:** ${task.priority || 'normal'}
+**Tags:** ${Array.isArray(task.tags) ? task.tags.join(', ') : 'none'}
 
 **Description:**
 ${task.description || '(No description provided)'}
 
 ---
 
-## Project Context
-- **Project Path:** ${projectPath}
-- **AGENTS.md:** ${projectPath}AGENTS.md
-- **context.md:** ${projectPath}context.md
+@Tasker please analyze this task and spawn the appropriate specialist agent to complete it.`;
 
-Read the project's AGENTS.md and context.md before starting work.
-
----
-
-## Task Completion Instructions
-
-**IMPORTANT:** When you have completed this task, you MUST update the task status using the project-manager skill:
-
-\`\`\`bash
-pm task done ${taskId} --project ${projectName}
-\`\`\`
-
-This marks the task as complete in TheNexus task board.
-
-**Available pm commands:**
-- \`pm task done <task-id> --project <project>\` - Mark task as done
-- \`pm task todo <task-id> --project <project>\` - Move back to todo
-- \`pm task in-progress <task-id> --project <project>\` - Set as in-progress
-
----
-
-## Workflow
-1. Read project context (AGENTS.md, context.md)
-2. Understand the task requirements
-3. Complete the work
-4. **Mark task as done:** Run \`pm task done ${taskId} --project ${projectName}\`
-5. Announce completion
-
----
-
-Work on this task now.`;
+    const { execSync } = await import('child_process');
+    const threadResult = execSync(
+      `openclaw message thread create ` +
+      `--channel discord ` +
+      `--target channel:1479614759916667051 ` +
+      `--thread-name "${threadTitle.replace(/"/g, '\\"')}" ` +
+      `--message "${threadMessage.replace(/"/g, '\\"')}" ` +
+      `--json`,
+      { encoding: 'utf-8', timeout: 30000 }
+    );
     
-    // Spawn a subagent using openclaw command
-    try {
-      // Spawn subagent with the task - use background execution
-      // The agent will run the task and announce completion
-      console.log(`Spawning subagent ${agentId} for task ${taskId}...`);
-      
-      // Execute in background (don't wait for completion)
-      // Use spawn instead of exec for better background process handling
-      const { spawn } = await import('child_process');
-      const child = spawn('openclaw', ['agent', '--agent', agentId, '--message', taskBrief], {
-        env: { ...process.env, FORCE_COLOR: '0' },
-        detached: true,
-        stdio: 'ignore',
-      });
-      
-      child.unref(); // Allow parent to exit independently
-      
-      console.log(`Subagent ${agentId} spawned with PID ${child.pid}`);
-      
-      // Update task status to in-progress
-      task.status = 'in-progress';
-      task.startedAt = new Date().toISOString();
-      task.updatedAt = new Date().toISOString();
-      
-      const proj = data.projects[projectName!] as any;
-      proj.updatedAt = new Date().toISOString();
-      
-      // Write back to file
-      fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2) + '\n');
-      
-      return c.json({ 
-        success: true, 
-        message: `Subagent ${agentId} spawned for task ${taskId}`,
-        agentId,
-        taskId,
-        pid: child.pid,
-      });
-    } catch (spawnError: any) {
-      console.error('Error spawning subagent:', spawnError.message);
-      return c.json({ error: `Failed to spawn subagent: ${spawnError.message}` }, 500);
+    const threadData = JSON.parse(threadResult);
+    const threadId = threadData.payload?.thread?.id;
+    
+    if (!threadId) {
+      throw new Error('Failed to create Discord thread');
     }
+    
+    console.log(`✅ Discord thread created: ${threadId}`);
+    
+    // Step 2: Store thread metadata in task
+    task.discordThreadId = threadId;
+    task.discordThreadUrl = `https://discord.com/channels/1474992983727407214/${threadId}`;
+    task.status = 'in-progress';
+    task.startedAt = new Date().toISOString();
+    task.updatedAt = new Date().toISOString();
+    
+    console.log(`✅ Discord thread created for task ${taskId}: ${threadId}`);
+    console.log(`⏳ Waiting for @Tasker to spawn subagent...`);
+    
+    // Save project data
+    const proj = data.projects[projectName!] as any;
+    proj.updatedAt = new Date().toISOString();
+    fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2) + '\n');
+    
+    return c.json({ 
+      success: true, 
+      message: `Task ${taskId} sent to @Tasker for orchestration`,
+      discordThreadId: threadId,
+      discordThreadUrl: task.discordThreadUrl,
+    });
+    
   } catch (error: any) {
     console.error('Error starting task:', error.message);
     return c.json({ error: error.message }, 500);
   }
 });
-
 const port = process.env.PORT || 3000;
 console.log(`🚀 Server running on http://localhost:${port}`);
 
