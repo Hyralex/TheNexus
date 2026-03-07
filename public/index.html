@@ -6,7 +6,7 @@
   <title>The Nexus</title>
   <link rel="stylesheet" href="/pico.min.css">
   <link rel="stylesheet" href="/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="/styles.css?v=20260307-0910">
+  <link rel="stylesheet" href="/styles.css?v=20260308-0955">
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.0/dist/htmx.min.js"></script>
 </head>
 <body>
@@ -184,26 +184,33 @@
           <div>
             <h1><i class="bi bi-kanban"></i> Project Tasks</h1>
             <div class="task-filters">
-              <input type="text" id="task-search" placeholder="Search tasks..." oninput="filterTasks()" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); width: 200px;">
-              <select id="filter-project" onchange="filterTasks()" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
-                <option value="">All Projects</option>
-              </select>
-              <select id="filter-priority" onchange="filterTasks()" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
-                <option value="">All Priorities</option>
-                <option value="urgent">🔴 Urgent</option>
-                <option value="high">🟠 High</option>
-                <option value="medium">🟡 Medium</option>
-                <option value="low">🟢 Low</option>
-              </select>
-              <select id="filter-tags" onchange="filterTasks()" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
-                <option value="">All Tags</option>
-              </select>
-              <select id="filter-refinement" onchange="filterTasks()" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
-                <option value="">All Tasks</option>
-                <option value="refined">✅ Refined</option>
-                <option value="unrefined">⚠️ Needs Review</option>
-                <option value="quick">⚡ Quick</option>
-              </select>
+              <button class="filter-toggle-btn" onclick="toggleFilters()" aria-label="Toggle filters">
+                <i class="bi bi-funnel"></i>
+                <span>Filters</span>
+                <i class="bi bi-chevron-up filter-toggle-icon"></i>
+              </button>
+              <div class="filter-controls" id="filter-controls">
+                <input type="text" id="task-search" placeholder="Search tasks..." oninput="filterTasks()" class="filter-input">
+                <select id="filter-project" onchange="filterTasks()" class="filter-select">
+                  <option value="">All Projects</option>
+                </select>
+                <select id="filter-priority" onchange="filterTasks()" class="filter-select">
+                  <option value="">All Priorities</option>
+                  <option value="urgent">🔴 Urgent</option>
+                  <option value="high">🟠 High</option>
+                  <option value="medium">🟡 Medium</option>
+                  <option value="low">🟢 Low</option>
+                </select>
+                <select id="filter-tags" onchange="filterTasks()" class="filter-select">
+                  <option value="">All Tags</option>
+                </select>
+                <select id="filter-refinement" onchange="filterTasks()" class="filter-select">
+                  <option value="">All Tasks</option>
+                  <option value="refined">✅ Refined</option>
+                  <option value="unrefined">⚠️ Needs Review</option>
+                  <option value="quick">⚡ Quick</option>
+                </select>
+              </div>
             </div>
           </div>
           <button class="icon-btn" onclick="loadTasks()" title="Refresh">
@@ -329,9 +336,9 @@
                 <label for="agent-select">Select Agent</label>
                 <select id="agent-select" name="agentId" required>
                   <option value="">Choose an agent...</option>
-                  <option value="main">🌙 Main (General tasks)</option>
-                  <option value="coder">👨💻 Coder (Development tasks)</option>
-                  <option value="tasker">🐝 Tasker (Task management)</option>
+                  <option value="main">🌙 Main (General tasks, writing, documentation)</option>
+                  <option value="coder">👨💻 Coder (Development, bugs, features)</option>
+                  <option value="aichan">🎀 Aichan (Research, analysis, investigation)</option>
                 </select>
               </div>
               <input type="hidden" id="start-task-id" value="">
@@ -433,6 +440,14 @@
       sidebar.classList.toggle('open');
       overlay.classList.toggle('active');
       document.body.classList.toggle('sidebar-open');
+    }
+    
+    // Toggle filter controls
+    function toggleFilters() {
+      const controls = document.getElementById('filter-controls');
+      const toggleBtn = document.querySelector('.filter-toggle-btn');
+      controls.classList.toggle('show');
+      toggleBtn.classList.toggle('active');
     }
     
     // Close sidebar when clicking a menu item on mobile
@@ -739,6 +754,13 @@
         <span class="detail-badge awaiting-badge">⏳ Awaiting Refinement</span>
       ` : '';
       
+      // Assigned agent badge
+      const assignedAgentBadge = task.assignedAgent ? `
+        <span class="assigned-agent-badge" title="Assigned to ${task.assignedAgent}">
+          <i class="bi bi-robot"></i> ${task.assignedAgent}
+        </span>
+      ` : '';
+      
       return `
         <div class="task-card">
           <div class="task-header">
@@ -749,9 +771,11 @@
           <div class="task-title">${escapeHtml(task.title)}</div>
           ${task.description ? `<div class="task-description">${escapeHtml(task.description).substring(0, 150)}${task.description.length > 150 ? '...' : ''}</div>` : ''}
           ${refinementBadge}
+          ${assignedAgentBadge}
           ${tagsHtml}
           <div class="task-meta">
             <span class="task-date"><i class="bi bi-calendar"></i> ${date}</span>
+            ${task.sessionKey ? `<span class="task-session" title="Session: ${task.sessionKey}"><i class="bi bi-link-45deg"></i> Session</span>` : ''}
           </div>
           <div class="task-actions">
             ${actionButtons}
@@ -1858,6 +1882,36 @@
       color: var(--accent-red);
     }
     
+    /* Assigned Agent Badge */
+    .assigned-agent-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+      background: rgba(88, 166, 255, 0.15);
+      color: var(--accent-blue);
+      margin: 0.25rem 0;
+    }
+    
+    .assigned-agent-badge i {
+      font-size: 0.6875rem;
+    }
+    
+    /* Task Session Link */
+    .task-session {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-left: 0.75rem;
+    }
+    
+    .task-session i {
+      font-size: 0.6875rem;
+      margin-right: 0.25rem;
+    }
+    
     /* Textarea styling */
     textarea {
       width: 100%;
@@ -1963,20 +2017,6 @@
     
     .project-link:hover {
       color: #4094e8;
-    }
-    
-    /* Task Filters */
-    .task-filters {
-      display: flex;
-      gap: 0.75rem;
-      margin-top: 1rem;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    
-    .task-filters input,
-    .task-filters select {
-      font-size: 0.875rem;
     }
     
     /* Tag Chips */
