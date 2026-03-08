@@ -6,46 +6,10 @@ import { taskService } from '../services/task-service.js';
 export const agents = new Hono();
 
 /**
- * GET /api/agents
- * List all available agents
- */
-agents.get('/', async (c) => {
-  try {
-    const agents = await openclaw.getAgents();
-    return c.json({ agents });
-  } catch (error: any) {
-    console.error('Error listing agents:', error.message);
-    return c.json({ error: 'Failed to list agents' }, 500);
-  }
-});
-
-/**
- * GET /api/agents/:id
- * Get agent details
- */
-agents.get('/:id', async (c) => {
-  const agentId = c.req.param('id');
-
-  try {
-    const agents = await openclaw.getAgents();
-    const agent = agents.find((a) => a.id === agentId);
-
-    if (!agent) {
-      return c.json({ error: 'Agent not found' }, 404);
-    }
-
-    return c.json({ agent });
-  } catch (error: any) {
-    console.error('Error fetching agent:', error.message);
-    return c.json({ error: 'Failed to fetch agent' }, 500);
-  }
-});
-
-/**
  * GET /api/agents/:id/status
  * Get agent availability status
  */
-agents.get('/:id/status', async (c) => {
+agents.get('/agents/:id/status', async (c) => {
   const agentId = c.req.param('id');
 
   try {
@@ -68,7 +32,7 @@ agents.get('/:id/status', async (c) => {
  * GET /api/agents/:id/history
  * Get recent tasks assigned to agent
  */
-agents.get('/:id/history', async (c) => {
+agents.get('/agents/:id/history', async (c) => {
   const agentId = c.req.param('id');
 
   try {
@@ -86,5 +50,41 @@ agents.get('/:id/history', async (c) => {
   } catch (error: any) {
     console.error('Error fetching agent history:', error.message);
     return c.json({ error: 'Failed to fetch agent history' }, 500);
+  }
+});
+
+/**
+ * GET /api/agents
+ * List all available agents
+ */
+agents.get('/agents', async (c) => {
+  try {
+    const agents = await openclaw.getAgents();
+    return c.json({ agents });
+  } catch (error: any) {
+    console.error('Error listing agents:', error.message);
+    return c.json({ error: 'Failed to list agents' }, 500);
+  }
+});
+
+/**
+ * GET /api/agents/:id
+ * Get agent details
+ */
+agents.get('/agents/:id', async (c) => {
+  const agentId = c.req.param('id');
+
+  try {
+    const agents = await openclaw.getAgents();
+    const agent = agents.find((a) => a.id === agentId);
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    return c.json({ agent });
+  } catch (error: any) {
+    console.error('Error fetching agent:', error.message);
+    return c.json({ error: 'Failed to fetch agent' }, 500);
   }
 });
