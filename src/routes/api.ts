@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { sessions } from './sessions.js';
 import { tasks } from './tasks.js';
 import { projects } from './projects.js';
+import { agents } from './agents.js';
 
 // API route grouping - mounts all API routes under /api
 export const api = new Hono();
@@ -19,3 +20,4 @@ api.get('/health', (c) => {
 api.route('', sessions);  // /api/sessions, /api/activity, /api/session/:key
 api.route('', tasks);     // /api/tasks, /api/tasks/:id, /api/refinement
 api.route('', projects);  // /api/projects, /api/projects/:name
+api.route('', agents);    // /api/agents, /api/agents/:id
