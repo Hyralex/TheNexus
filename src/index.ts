@@ -414,7 +414,7 @@ app.put('/api/tasks/:id', async (c) => {
     const projectFilter = c.req.query('project'); // Optional project filter
     const body = await c.req.json();
     // Accept all editable fields: title, description, project, priority, tags, and refinement fields
-    const { title, description, project: newProject, priority, tags, refined, refinedAt, refinedBy } = body;
+    const { title, description, project: newProject, priority, tags, refined, refinedAt, refinedBy, refinementSessionKey } = body;
     
     if (!fs.existsSync(PROJECTS_FILE)) {
       return c.json({ error: 'Projects file not found' }, 404);
@@ -447,6 +447,7 @@ app.put('/api/tasks/:id', async (c) => {
           if (refined !== undefined) task.refined = refined;
           if (refinedAt !== undefined) task.refinedAt = refinedAt;
           if (refinedBy !== undefined) task.refinedBy = refinedBy;
+          if (refinementSessionKey !== undefined) task.refinementSessionKey = refinementSessionKey;
           
           // Clear awaitingRefinement flag if refined
           if (refined === true) {
@@ -508,7 +509,7 @@ app.put('/api/tasks/:id', async (c) => {
 app.post('/api/tasks', async (c) => {
   try {
     const body = await c.req.json();
-    const { title, description, project, skipRefinement } = body;
+    const { title, description, project } = body;
     
     if (!title || !project) {
       return c.json({ error: 'Title and project are required' }, 400);
@@ -531,10 +532,8 @@ app.post('/api/tasks', async (c) => {
     
     const proj = data.projects[project] as any;
     
-    // Check if refinement should be skipped
-    const shouldSkipRefinement = skipRefinement === true;
-    
-    // Create task immediately
+    // Create task immediately - all tasks start in todo status
+    // User can choose to refine or start task directly from UI
     const newTask: any = {
       id: taskId,
       title,
@@ -547,30 +546,8 @@ app.post('/api/tasks', async (c) => {
       refinedAt: null,
       refinedBy: null,
       originalDescription: description !== undefined ? description : null,
-      skipRefinement: shouldSkipRefinement,
-      awaitingRefinement: !shouldSkipRefinement,
+      awaitingRefinement: false, // No longer auto-spawn refinement
     };
-    
-    // Spawn refinement agent asynchronously (don't wait)
-    if (!shouldSkipRefinement) {
-      console.log(`🔄 Spawning refinement agent for task: ${taskId} - "${title}"`);
-      // Track refinement status
-      refinementStatus.set(taskId, {
-        status: 'pending',
-        startedAt: new Date().toISOString(),
-      });
-      spawnRefinementAgent(taskId, title, description || '', project, (success, error) => {
-        // Update status when refinement completes
-        const status = refinementStatus.get(taskId);
-        if (status) {
-          status.status = success ? 'completed' : 'failed';
-          status.completedAt = new Date().toISOString();
-          if (error) status.error = error;
-          refinementStatus.set(taskId, status);
-        }
-        console.log(`✅ Refinement ${success ? 'completed' : 'failed'} for task ${taskId}`);
-      });
-    }
     
     // Add task to project
     if (!proj.tasks) {
@@ -582,16 +559,208 @@ app.post('/api/tasks', async (c) => {
     // Write back to file
     fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2) + '\n');
     
-    console.log(`✓ Task created: ${taskId}${!shouldSkipRefinement ? ' (awaiting refinement)' : ''}`);
+    console.log(`✓ Task created: ${taskId}`);
     
-    return c.json({ success: true, task: newTask, awaitingRefinement: !shouldSkipRefinement });
+    return c.json({ success: true, task: newTask });
   } catch (error: any) {
     console.error('Error creating task:', error.message);
     return c.json({ error: error.message }, 500);
   }
 });
 
-// Manual refinement endpoint
+// Start refinement endpoint - moves task to refinement status and spawns agent
+app.post('/api/tasks/:id/start-refinement', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { taskId, agentId, project } = body;
+    
+    if (!taskId) {
+      return c.json({ error: 'taskId is required' }, 400);
+    }
+    
+    if (!agentId) {
+      return c.json({ error: 'agentId is required' }, 400);
+    }
+    
+    if (!fs.existsSync(PROJECTS_FILE)) {
+      return c.json({ error: 'Projects file not found' }, 404);
+    }
+    
+    const data = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8'));
+    
+    // Find the task
+    let task: any = null;
+    let projectName: string | null = null;
+    
+    for (const [name, projData] of Object.entries(data.projects || {})) {
+      const proj = projData as any;
+      if (proj.tasks) {
+        const foundTask = proj.tasks.find((t: any) => t.id === taskId);
+        if (foundTask) {
+          if (project && name !== project) continue;
+          task = foundTask;
+          projectName = name;
+          break;
+        }
+      }
+    }
+    
+    if (!task) {
+      return c.json({ error: `Task '${taskId}' not found` }, 404);
+    }
+    
+    // Move task to refinement status
+    task.status = 'refinement';
+    task.assignedAgent = agentId;
+    task.updatedAt = new Date().toISOString();
+    
+    const proj = data.projects[projectName!] as any;
+    proj.updatedAt = new Date().toISOString();
+    fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2) + '\n');
+    
+    console.log(`🔄 Starting refinement for task ${taskId} with agent ${agentId}...`);
+    
+    // Find existing Discord channel session for this agent (same as start task)
+    let sessionArg = `--agent ${agentId}`;
+    try {
+      const { stdout: sessionsOut } = await execAsync('openclaw sessions --all-agents --json', {
+        env: { ...process.env, FORCE_COLOR: '0' },
+      });
+      const sessionsData = JSON.parse(sessionsOut);
+      
+      const discordSession = sessionsData.sessions?.find((s: any) => 
+        s.agentId === agentId && 
+        s.key && 
+        s.key.includes('discord:channel:')
+      );
+      
+      if (discordSession?.sessionId) {
+        console.log(`📌 Found existing Discord session for ${agentId}: ${discordSession.key}`);
+        sessionArg = `--session-id ${discordSession.sessionId}`;
+      } else {
+        console.log(`⚠️ No existing Discord session for ${agentId}, using --agent fallback`);
+      }
+    } catch (sessionError: any) {
+      console.warn(`⚠️ Could not lookup sessions: ${sessionError.message}`);
+    }
+    
+    // Build refinement message - instructs agent to spawn a threaded subagent
+    const refinementMessage = `🎯 **Refinement Assignment: ${task.id}**
+
+**Project:** ${projectName}
+**Title:** ${task.title}
+**Current Description:** ${task.description || 'No description provided'}
+
+## Your Task
+
+You are assigned to **refine** this task. Refinement is about **planning and design**, NOT implementation.
+
+### What to Do:
+
+1. **Spawn a subagent in a Discord thread** to do the refinement work:
+   - Use \`sessions_spawn\` with \`thread: true\` and \`mode: "session"\`
+   - Pass the refinement instructions to the subagent
+   - The subagent will handle the actual refinement in an isolated thread
+
+2. **Subagent workflow:**
+   - Move task to refinement: \`pm task move ${task.id} refinement --project ${projectName}\`
+   - Gather context from project files
+   - Enrich description with: objective, technical approach, files to modify, acceptance criteria, dependencies, pitfalls
+   - Mark complete: \`pm task refine ${task.id} --complete\`
+   - Move back to todo: \`pm task move ${task.id} todo --project ${projectName}\`
+
+## Example Spawn Command
+
+\`\`\`typescript
+sessions_spawn({
+  task: \`**Refinement Task: ${task.id}**
+
+**Project:** ${projectName}
+**Title:** ${task.title}
+**Current Description:** ${task.description || '(none)'}
+
+Enrich this task description with:
+- Clear objective
+- Technical approach
+- Files to modify
+- Acceptance criteria
+- Dependencies
+- Potential pitfalls
+
+When done:
+1. pm task move ${task.id} refinement --project ${projectName}
+2. pm task refine ${task.id} --complete
+3. pm task move ${task.id} todo --project ${projectName}\`,
+  thread: true,
+  mode: "session",
+  label: "task-${task.id}-refinement"
+})
+\`\`\`
+
+Start the refinement process now.`;
+
+    // Spawn agent asynchronously (same as start task)
+    const execFileAsync = promisify(execFile);
+    
+    const args: string[] = ['agent'];
+    if (sessionArg.startsWith('--session-id')) {
+      const sessionId = sessionArg.split(' ')[1];
+      args.push('--session-id', sessionId);
+    } else if (sessionArg.startsWith('--agent')) {
+      const agentIdFromArg = sessionArg.split(' ')[1];
+      args.push('--agent', agentIdFromArg);
+    }
+    args.push('--message', refinementMessage);
+    
+    execFileAsync('openclaw', args, {
+      timeout: 300000, // 5 minute timeout
+    }).then(({ stdout, stderr }) => {
+      console.log(`✅ Refinement agent ${agentId} spawned for task ${taskId}`);
+      
+      // Extract session key
+      const sessionKeyMatch = stdout.match(/session[:\s]+([^\s]+)/i);
+      const sessionKey = sessionKeyMatch ? sessionKeyMatch[1] : null;
+      
+      if (sessionKey) {
+        try {
+          const projData = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8'));
+          let found = false;
+          for (const [projName, projDataObj] of Object.entries(projData.projects || {})) {
+            const proj = projDataObj as any;
+            if (proj.tasks) {
+              const t = proj.tasks.find((t: any) => t.id === taskId);
+              if (t) {
+                t.refinementSessionKey = sessionKey;
+                t.updatedAt = new Date().toISOString();
+                fs.writeFileSync(PROJECTS_FILE, JSON.stringify(projData, null, 2) + '\n');
+                console.log(`💾 Stored refinement session key for task ${taskId}: ${sessionKey}`);
+                found = true;
+                break;
+              }
+            }
+          }
+        } catch (readError: any) {
+          console.error(`❌ Error storing refinement session key: ${readError.message}`);
+        }
+      }
+    }).catch((spawnError: any) => {
+      console.error(`⚠️ Refinement agent spawn error for task ${taskId}:`, spawnError.message);
+    });
+    
+    return c.json({ 
+      success: true, 
+      message: `Task ${taskId} assigned to ${agentId} for refinement. Agent will move task to refinement status.`,
+      agentId: agentId,
+      status: 'refinement',
+    });
+    
+  } catch (error: any) {
+    console.error('Error starting refinement:', error.message);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+// Manual refinement endpoint (synchronous, immediate refinement)
 app.post('/api/tasks/:id/refine', async (c) => {
   try {
     const taskId = c.req.param('id');
@@ -626,9 +795,7 @@ app.post('/api/tasks/:id/refine', async (c) => {
           task.refinedAt = new Date().toISOString();
           task.refinedBy = 'agent:coder:manual-refine';
           task.awaitingRefinement = false;
-          task.refinedBy = 'agent:coder:manual-refine';
           task.updatedAt = new Date().toISOString();
-          task.skipRefinement = false;
           
           proj.updatedAt = new Date().toISOString();
           updatedTask = { ...task, project: name };
@@ -692,8 +859,8 @@ app.patch('/api/tasks/:id', async (c) => {
     const body = await c.req.json();
     const { status } = body;
     
-    if (!status || !['todo', 'in-progress', 'done'].includes(status)) {
-      return c.json({ error: 'Invalid status. Must be todo, in-progress, or done' }, 400);
+    if (!status || !['todo', 'refinement', 'in-progress', 'done'].includes(status)) {
+      return c.json({ error: 'Invalid status. Must be todo, refinement, in-progress, or done' }, 400);
     }
     
     if (!fs.existsSync(PROJECTS_FILE)) {
@@ -831,25 +998,9 @@ app.post('/api/tasks/start', async (c) => {
     
     console.log(`🚀 Spawning agent ${agentId} for task ${taskId}...`);
     
-    // Build the task message for the agent
-    const taskMessage = `🎯 **Task Assignment: ${task.id}**
-
-**Project:** ${projectName}
-**Title:** ${task.title}
-**Description:** ${task.description || 'No description provided'}
-
-**Instructions:**
-1. Work on this task in the current session
-2. When finished, mark the task as done: pm task done ${taskId} --project ${projectName}
-3. Post a summary of what you accomplished
-
-Start working on this task now.`;
-
-    // Update task status immediately (don't wait for agent)
-    task.status = 'in-progress';
-    task.startedAt = new Date().toISOString();
-    task.updatedAt = new Date().toISOString();
+    // Track which agent is assigned (but don't change status - agent does that)
     task.assignedAgent = agentId;
+    task.updatedAt = new Date().toISOString();
     
     // Save project data
     const proj = data.projects[projectName!] as any;
@@ -895,14 +1046,19 @@ Start working on this task now.`;
 
 You are working on a task from the **Project Manager** system. Follow these steps:
 
-1. **Spawn a subagent in a Discord thread** to do the actual work:
+1. **Mark the task as in-progress** when you start working:
+   - Run: \`pm task move ${task.id} in-progress --project ${projectName}\`
+   - This moves the task from "todo" to "in-progress" in the kanban
+
+2. **Spawn a subagent in a Discord thread** to do the actual work:
    - Use \`sessions_spawn\` with \`thread: true\` and \`mode: "session"\`
    - Pass the full task description to the subagent
    - Include instructions to run \`pm task complete ${task.id} --project ${projectName}\` when done
 
-2. **Monitor the subagent** - it will announce back when complete
+3. **Monitor the subagent** - it will announce back when complete
 
-3. **Verify the task is marked done** in the project kanban
+4. **Complete the task** when work is done:
+   - Run: \`pm task complete ${task.id} --project ${projectName} --message "summary"\`
 
 ## Example Spawn Command
 
@@ -962,18 +1118,17 @@ Start working on this task now.`;
       }
     }).catch((spawnError: any) => {
       console.error(`⚠️ Agent spawn error for task ${taskId}:`, spawnError.message);
-      // Mark task as failed if agent couldn't start
-      task.status = 'todo';
-      task.assignedAgent = null;
-      fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2) + '\n');
+      // Note: Don't change task status on spawn failure - let the agent handle it
+      console.log(`   Task ${taskId} remains in todo status`);
     });
     
     // Return immediately - agent runs in background
+    // Note: Task status remains 'todo' - the agent is responsible for moving it to 'in-progress'
     return c.json({ 
       success: true, 
-      message: `Task ${taskId} started with agent ${agentId}`,
+      message: `Task ${taskId} assigned to agent ${agentId}. Agent should move task to in-progress when starting work.`,
       agentId: agentId,
-      status: 'in-progress',
+      status: 'todo', // Task remains in todo until agent starts working
     });
     
   } catch (error: any) {

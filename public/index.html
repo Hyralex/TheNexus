@@ -245,16 +245,10 @@
                 </button>
               </div>
             </div>
-            <div style="margin-top: 1rem; display: flex; align-items: center; gap: 0.5rem;">
-              <input type="checkbox" id="skip-refinement" name="skipRefinement" style="width: auto; min-height: auto;">
-              <label for="skip-refinement" style="margin: 0; cursor: pointer; color: var(--text-secondary); font-size: 0.875rem;">
-                <i class="bi bi-lightning-fill" style="color: var(--accent-blue);"></i> Skip refinement (quick task)
-              </label>
-            </div>
           </form>
         </section>
         
-        <div class="dashboard-grid">
+        <div class="dashboard-grid" style="grid-template-columns: repeat(4, 1fr);">
           <!-- Todo Column -->
           <section class="card">
             <header>
@@ -262,6 +256,17 @@
               <small id="todo-count">0</small>
             </header>
             <div id="todo-tasks" class="task-list">
+              <div class="loading"><i class="bi bi-arrow-clockwise spinning"></i> Loading...</div>
+            </div>
+          </section>
+          
+          <!-- Refinement Column -->
+          <section class="card refinement-column">
+            <header>
+              <h2><i class="bi bi-stars"></i> Refinement</h2>
+              <small id="refinement-count">0</small>
+            </header>
+            <div id="refinement-tasks" class="task-list">
               <div class="loading"><i class="bi bi-arrow-clockwise spinning"></i> Loading...</div>
             </div>
           </section>
@@ -346,6 +351,39 @@
                 <button type="button" class="secondary-btn" onclick="closeStartTaskModal()">Cancel</button>
                 <button type="submit" class="primary-btn">
                   <i class="bi bi-play-fill"></i> Start Task
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Refine Task Modal -->
+      <div id="refine-task-modal" class="modal-overlay" style="display: none;" onclick="closeRefineTaskModal(event)">
+        <div class="modal-content">
+          <header class="modal-header">
+            <h2><i class="bi bi-stars"></i> Refine Task</h2>
+            <button class="icon-btn" onclick="closeRefineTaskModal()" title="Close">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </header>
+          <div class="modal-body">
+            <div id="refine-task-info" class="task-info"></div>
+            <form id="refine-task-form" onsubmit="startRefinementWithAgent(event)">
+              <div class="form-group">
+                <label for="refine-agent-select">Select Agent for Refinement</label>
+                <select id="refine-agent-select" name="agentId" required>
+                  <option value="">Choose an agent...</option>
+                  <option value="main">🌙 Main (General tasks, writing, documentation)</option>
+                  <option value="coder">👨💻 Coder (Development, bugs, features)</option>
+                  <option value="aichan">🎀 Aichan (Research, analysis, investigation)</option>
+                </select>
+              </div>
+              <input type="hidden" id="refine-task-id" value="">
+              <div class="modal-actions">
+                <button type="button" class="secondary-btn" onclick="closeRefineTaskModal()">Cancel</button>
+                <button type="submit" class="primary-btn">
+                  <i class="bi bi-stars"></i> Start Refinement
                 </button>
               </div>
             </form>
@@ -563,7 +601,6 @@
       const title = document.getElementById('task-title').value.trim();
       const description = document.getElementById('task-description').value.trim();
       const project = document.getElementById('task-project').value;
-      const skipRefinement = document.getElementById('skip-refinement').checked;
       
       if (!title || !project) {
         alert('Please fill in title and select a project');
@@ -574,7 +611,7 @@
         const response = await fetch('/api/tasks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, project, skipRefinement }),
+          body: JSON.stringify({ title, description, project }),
         });
         
         const result = await response.json();
@@ -617,16 +654,22 @@
     
     function renderTasks(tasks) {
       const todo = tasks.filter(t => t.status === 'todo');
+      const refinement = tasks.filter(t => t.status === 'refinement');
       const inProgress = tasks.filter(t => t.status === 'in-progress');
       const done = tasks.filter(t => t.status === 'done');
       
       document.getElementById('todo-count').textContent = todo.length;
+      document.getElementById('refinement-count').textContent = refinement.length;
       document.getElementById('inprogress-count').textContent = inProgress.length;
       document.getElementById('done-count').textContent = done.length;
       
       document.getElementById('todo-tasks').innerHTML = todo.length === 0 
         ? '<div class="empty-state"><i class="bi bi-inbox"></i><p>No tasks</p></div>'
         : todo.map(renderTaskCard).join('');
+      
+      document.getElementById('refinement-tasks').innerHTML = refinement.length === 0
+        ? '<div class="empty-state"><i class="bi bi-inbox"></i><p>No tasks</p></div>'
+        : refinement.map(renderTaskCard).join('');
       
       document.getElementById('inprogress-tasks').innerHTML = inProgress.length === 0
         ? '<div class="empty-state"><i class="bi bi-inbox"></i><p>No tasks</p></div>'
@@ -706,6 +749,18 @@
           <button class="task-action-btn start-btn" data-task-id="${task.id}" data-task-title="${escapeHtml(task.title)}" data-task-description="${escapeHtml(task.description || '')}" title="Start task">
             <i class="bi bi-play-fill"></i> Start
           </button>
+          <button class="task-action-btn refine-btn" data-task-id="${task.id}" data-task-title="${escapeHtml(task.title)}" data-task-description="${escapeHtml(task.description || '')}" title="Refine task">
+            <i class="bi bi-stars"></i> Refine
+          </button>
+        `;
+      } else if (task.status === 'refinement') {
+        actionButtons = `
+          <button class="task-action-btn complete-refinement-btn" onclick="completeRefinement('${task.id}', '${task.project}')" title="Mark refinement complete">
+            <i class="bi bi-check-lg"></i> Refined
+          </button>
+          <button class="task-action-btn cancel-refinement-btn" onclick="updateTaskStatus('${task.id}', 'todo')" title="Cancel refinement">
+            <i class="bi bi-x-lg"></i> Cancel
+          </button>
         `;
       } else if (task.status === 'in-progress') {
         actionButtons = `
@@ -775,7 +830,12 @@
           ${tagsHtml}
           <div class="task-meta">
             <span class="task-date"><i class="bi bi-calendar"></i> ${date}</span>
-            ${task.sessionKey ? `<span class="task-session" title="Session: ${task.sessionKey}"><i class="bi bi-link-45deg"></i> Session</span>` : ''}
+            ${task.sessionKey || task.refinementSessionKey ? `
+              <span class="task-sessions">
+                ${task.sessionKey ? `<a href="/session/${encodeURIComponent(task.sessionKey)}" class="task-session-link" title="Work Session: ${task.sessionKey}"><i class="bi bi-play-circle"></i> Work</a>` : ''}
+                ${task.refinementSessionKey ? `<a href="/session/${encodeURIComponent(task.refinementSessionKey)}" class="task-session-link refinement-session" title="Refinement Session: ${task.refinementSessionKey}"><i class="bi bi-stars"></i> Refined</a>` : ''}
+              </span>
+            ` : ''}
           </div>
           <div class="task-actions">
             ${actionButtons}
@@ -813,6 +873,15 @@
           const title = startBtn.getAttribute('data-task-title');
           const description = unescapeNewlines(startBtn.getAttribute('data-task-description') || '');
           showStartTaskModal(taskId, title, description);
+          return;
+        }
+        
+        const refineBtn = e.target.closest('.refine-btn');
+        if (refineBtn) {
+          const taskId = refineBtn.getAttribute('data-task-id');
+          const title = refineBtn.getAttribute('data-task-title');
+          const description = unescapeNewlines(refineBtn.getAttribute('data-task-description') || '');
+          showRefineTaskModal(taskId, title, description);
           return;
         }
       });
@@ -1413,6 +1482,30 @@
               <div class="detail-item"><strong>Completed:</strong> ${completed}</div>
             </div>
           </div>
+          
+          ${(task.sessionKey || task.refinementSessionKey) ? `
+          <div class="task-detail-section">
+            <h4><i class="bi bi-link-45deg"></i> Sessions</h4>
+            <div class="session-links">
+              ${task.sessionKey ? `
+                <div class="session-link-item">
+                  <strong>Work Session:</strong>
+                  <a href="/session/${encodeURIComponent(task.sessionKey)}" class="session-link" target="_blank">
+                    <i class="bi bi-play-circle"></i> ${task.sessionKey}
+                  </a>
+                </div>
+              ` : ''}
+              ${task.refinementSessionKey ? `
+                <div class="session-link-item">
+                  <strong>Refinement Session:</strong>
+                  <a href="/session/${encodeURIComponent(task.refinementSessionKey)}" class="session-link refinement" target="_blank">
+                    <i class="bi bi-stars"></i> ${task.refinementSessionKey}
+                  </a>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+          ` : ''}
         `;
         
         document.getElementById('task-details-content').innerHTML = html;
@@ -1569,12 +1662,114 @@
         const result = await response.json();
         
         if (result.success) {
-          // Update task status to in-progress
-          await updateTaskStatus(taskId, 'in-progress');
+          // Don't update status here - the agent is responsible for moving the task to in-progress
           closeStartTaskModal();
-          alert(`Task started with ${agentId} agent! Session: ${result.sessionKey || 'N/A'}`);
+          alert(`Task assigned to ${agentId} agent! The agent will move it to in-progress when starting work. Session: ${result.sessionKey || 'N/A'}`);
+          loadTasks(); // Refresh to show assigned agent badge
         } else {
           alert('Error: ' + (result.error || 'Failed to start task'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+    
+    // Refine task modal functions
+    function showRefineTaskModal(taskId, title, description) {
+      document.getElementById('refine-task-id').value = taskId;
+      document.getElementById('refine-task-info').innerHTML = `
+        <div class="task-preview">
+          <h3>${escapeHtml(title)}</h3>
+          ${description ? `<p>${escapeHtml(description)}</p>` : ''}
+          <p class="task-instructions">Select which agent should refine this task. The agent will:</p>
+          <ul style="margin: 0.5rem 0 0 1.25rem; color: var(--text-secondary); font-size: 0.875rem;">
+            <li>Review and enrich the task description</li>
+            <li>Add technical approach and acceptance criteria</li>
+            <li>Identify dependencies and potential pitfalls</li>
+            <li>Move task back to todo when complete</li>
+          </ul>
+        </div>
+      `;
+      const modal = document.getElementById('refine-task-modal');
+      modal.style.display = '';
+      modal.classList.add('active');
+    }
+    
+    function closeRefineTaskModal(event) {
+      if (!event || event.target === document.getElementById('refine-task-modal')) {
+        const modal = document.getElementById('refine-task-modal');
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+      }
+    }
+    
+    // Start refinement with selected agent
+    async function startRefinementWithAgent(event) {
+      event.preventDefault();
+      
+      const taskId = document.getElementById('refine-task-id').value;
+      const agentId = document.getElementById('refine-agent-select').value;
+      
+      if (!agentId) {
+        alert('Please select an agent');
+        return;
+      }
+      
+      // Find the task to get its project
+      const task = allTasks.find(t => t.id === taskId);
+      const project = task ? task.project : null;
+      
+      try {
+        const response = await fetch(`/api/tasks/${taskId}/start-refinement`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ taskId, agentId, project }),
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          closeRefineTaskModal();
+          alert(`Task ${taskId} assigned to ${agentId} for refinement! The agent will move it to refinement status and enrich the description.`);
+          loadTasks(); // Refresh to show updated status
+        } else {
+          alert('Error: ' + (result.error || 'Failed to start refinement'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+    
+    // Complete refinement (mark task as refined and move back to todo)
+    async function completeRefinement(taskId, project) {
+      if (!confirm('Mark this task as refined and move it back to todo?')) return;
+      
+      try {
+        const response = await fetch(`/api/tasks/${taskId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            refined: true,
+            refinedAt: new Date().toISOString(),
+            refinedBy: 'agent:manual',
+            project: project,
+          }),
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          // Move task back to todo
+          await fetch(`/api/tasks/${taskId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'todo' }),
+          });
+          
+          loadTasks();
+          alert('Task marked as refined and moved back to todo!');
+        } else {
+          alert('Error: ' + (result.error || 'Failed to complete refinement'));
         }
       } catch (err) {
         alert('Error: ' + err.message);

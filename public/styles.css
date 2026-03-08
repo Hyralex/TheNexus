@@ -132,6 +132,49 @@ body.sidebar-open {
   gap: 0.5rem;
 }
 
+/* Task Detail Session Links */
+.session-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.session-link-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.session-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.2s;
+  background: rgba(88, 166, 255, 0.1);
+  color: var(--accent-blue);
+  word-break: break-all;
+}
+
+.session-link:hover {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+.session-link.refinement {
+  background: rgba(160, 107, 255, 0.1);
+  color: var(--accent-purple);
+}
+
+.session-link.refinement:hover {
+  background: var(--accent-purple);
+  color: #fff;
+}
+
 /* Layout */
 .layout {
   display: flex;
@@ -789,6 +832,40 @@ table code {
 
 .task-meta i {
   font-size: 0.6875rem;
+}
+
+.task-sessions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.task-session-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s;
+  background: rgba(88, 166, 255, 0.1);
+  color: var(--accent-blue);
+}
+
+.task-session-link:hover {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+.task-session-link.refinement-session {
+  background: rgba(160, 107, 255, 0.1);
+  color: var(--accent-purple);
+}
+
+.task-session-link.refinement-session:hover {
+  background: var(--accent-purple);
+  color: #fff;
 }
 
 .task-actions {
@@ -1483,6 +1560,54 @@ select:focus {
 .detail-badge.quick-badge {
   background: rgba(88, 166, 255, 0.15);
   color: var(--accent-blue);
+}
+
+/* Refinement Column */
+.refinement-column {
+  border: 2px solid var(--accent-purple);
+  background: linear-gradient(135deg, rgba(163, 113, 247, 0.05) 0%, var(--bg-card) 100%);
+}
+
+.refinement-column header h2 {
+  color: var(--accent-purple) !important;
+}
+
+.refinement-column header h2 i {
+  color: var(--accent-purple) !important;
+}
+
+/* Refinement Action Buttons */
+.refine-btn {
+  background: rgba(163, 113, 247, 0.15);
+  color: var(--accent-purple);
+  border: 1px solid var(--accent-purple);
+}
+
+.refine-btn:hover {
+  background: var(--accent-purple);
+  color: #fff;
+}
+
+.complete-refinement-btn {
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--accent-green);
+  border: 1px solid var(--accent-green);
+}
+
+.complete-refinement-btn:hover {
+  background: var(--accent-green);
+  color: #fff;
+}
+
+.cancel-refinement-btn {
+  background: rgba(139, 148, 158, 0.15);
+  color: var(--text-secondary);
+  border: 1px solid var(--text-muted);
+}
+
+.cancel-refinement-btn:hover {
+  background: var(--text-muted);
+  color: #fff;
 }
 
 /* Print styles */

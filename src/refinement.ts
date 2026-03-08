@@ -120,14 +120,14 @@ export async function refineTaskDescriptionSync(
  * Runs asynchronously - doesn't wait for completion
  * The subagent will call PUT /api/tasks/:id to update the description
  * 
- * @param callback - Optional callback invoked when refinement completes: (success: boolean, error?: string) => void
+ * @param callback - Optional callback invoked when refinement completes: (success: boolean, error?: string, sessionKey?: string) => void
  */
 export async function spawnRefinementAgent(
   taskId: string,
   title: string,
   description: string,
   project: string,
-  callback?: (success: boolean, error?: string) => void
+  callback?: (success: boolean, error?: string, sessionKey?: string) => void
 ): Promise<void> {
   console.log(`🤖 Spawning refinement agent for task ${taskId}: "${title}"`);
   
@@ -143,10 +143,19 @@ export async function spawnRefinementAgent(
     // Execute and capture output
     const { stdout } = await execAsync(command, { timeout: 120000 }); // 2 minute timeout
     
+    // Extract session key from output
+    const sessionKeyMatch = stdout.match(/session[:\s]+([^\s]+)/i);
+    const sessionKey = sessionKeyMatch ? sessionKeyMatch[1] : null;
+    
     // Parse JSON output to extract the message text
     let refinedDescription = '';
     try {
-      const result = JSON.parse(stdout);
+      // Extract JSON from stdout (may have "Process exited..." or other text after)
+      const jsonStart = stdout.indexOf('{');
+      const jsonEnd = stdout.lastIndexOf('}');
+      const jsonStr = stdout.substring(jsonStart, jsonEnd + 1);
+      
+      const result = JSON.parse(jsonStr);
       // Extract text from the nested JSON structure: result.payloads[0].text
       if (result.result?.payloads?.[0]?.text) {
         refinedDescription = result.result.payloads[0].text;
@@ -160,6 +169,7 @@ export async function spawnRefinementAgent(
       }
     } catch (parseError: any) {
       console.warn(`⚠️ JSON parse error: ${parseError.message}`);
+      console.warn(`   stdout preview: ${stdout.substring(0, 200)}...`);
       // Fallback: use stdout directly if not JSON
       refinedDescription = stdout.trim();
     }
@@ -195,15 +205,15 @@ export async function spawnRefinementAgent(
       
       console.log(`✅ Task ${taskId} refined successfully in project ${project}`);
       console.log(`   Description length: ${refinedDescription.length} chars`);
-      callback?.(true);
+      callback?.(true, undefined, sessionKey || undefined);
     } else {
       console.warn(`⚠️ Refinement agent returned empty or too-short output for task ${taskId}`);
       console.log(`   Output preview: ${refinedDescription.substring(0, 100)}...`);
-      callback?.(false, 'Empty or insufficient refinement output');
+      callback?.(false, 'Empty or insufficient refinement output', sessionKey || undefined);
     }
   } catch (error: any) {
     console.error(`❌ Error in refinement for task ${taskId}:`, error.message);
     console.error(`   Stack:`, error.stack);
-    callback?.(false, error.message);
+    callback?.(false, error.message, undefined);
   }
 }
