@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun run build)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(curl -s http://localhost:3000/api/projects)",
+      "Bash(curl -s http://localhost:3000/api/tasks)",
+      "Bash(curl -s http://localhost:3000/)"
+    ]
+  }
+}
