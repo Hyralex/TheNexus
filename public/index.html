@@ -6,7 +6,11 @@
   <title>The Nexus</title>
   <link rel="stylesheet" href="/pico.min.css">
   <link rel="stylesheet" href="/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="/styles.css?v=20260308-0955">
+  <link rel="stylesheet" href="/styles.css?v=20260308-1200">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.0/dist/htmx.min.js"></script>
 </head>
 <body>
@@ -606,7 +610,7 @@
       const project = document.getElementById('task-project').value;
       
       if (!title || !project) {
-        alert('Please fill in title and select a project');
+        showError('Please fill in title and select a project');
         return;
       }
       
@@ -624,10 +628,10 @@
           form.reset();
           loadTasks();
         } else {
-          alert('Error: ' + (result.error || 'Failed to create task'));
+          showError('Error: ' + (result.error || 'Failed to create task'));
         }
       } catch (err) {
-        alert('Error: ' + err.message);
+        showError('Error: ' + err.message);
       }
     }
     
@@ -662,7 +666,14 @@
       const todo = tasks.filter(t => t.status === 'todo');
       const refinement = tasks.filter(t => t.status === 'refinement');
       const inProgress = tasks.filter(t => t.status === 'in-progress');
-      const done = tasks.filter(t => t.status === 'done');
+      const done = tasks
+        .filter(t => t.status === 'done')
+        .sort((a, b) => {
+          // Sort by completedAt descending (most recent first)
+          const dateA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+          const dateB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+          return dateB - dateA;
+        });
       
       document.getElementById('todo-count').textContent = todo.length;
       document.getElementById('refinement-count').textContent = refinement.length;
@@ -1263,13 +1274,13 @@
         const result = await response.json();
         
         if (result.success) {
-          alert('Session aborted successfully');
+          showSuccess('Session aborted successfully');
           window.location.href = '/sessions';
         } else {
-          alert('Error: ' + (result.error || 'Failed to kill session'));
+          showError('Error: ' + (result.error || 'Failed to kill session'));
         }
       } catch (err) {
-        alert('Error: ' + err.message);
+        showError('Error: ' + err.message);
       }
     }
     
@@ -1410,11 +1421,12 @@
           closeCreateProjectModal();
           document.getElementById('create-project-form').reset();
           loadProjectsList();
+          showSuccess('Project created successfully');
         } else {
-          alert('Error: ' + (result.error || 'Failed to create project'));
+          showError('Error: ' + (result.error || 'Failed to create project'));
         }
       } catch (err) {
-        alert('Error: ' + err.message);
+        showError('Error: ' + err.message);
       }
     }
     
@@ -1433,11 +1445,12 @@
         
         if (result.success) {
           loadProjectsList();
+          showSuccess('Project updated successfully');
         } else {
-          alert('Error: ' + (result.error || 'Failed to update project'));
+          showError('Error: ' + (result.error || 'Failed to update project'));
         }
       } catch (err) {
-        alert('Error: ' + err.message);
+        showError('Error: ' + err.message);
       }
     }
     
@@ -1453,11 +1466,12 @@
         
         if (result.success) {
           loadProjectsList();
+          showSuccess('Project deleted successfully');
         } else {
-          alert('Error: ' + (result.error || 'Failed to delete project'));
+          showError('Error: ' + (result.error || 'Failed to delete project'));
         }
       } catch (err) {
-        alert('Error: ' + err.message);
+        showError('Error: ' + err.message);
       }
     }
     
@@ -1474,11 +1488,12 @@
         
         if (result.success) {
           loadTasks();
+          showSuccess('Task status updated successfully');
         } else {
-          alert('Error: ' + (result.error || 'Failed to update task status'));
+          showError('Error: ' + (result.error || 'Failed to update task status'));
         }
       } catch (err) {
-        alert('Error: ' + err.message);
+        showError('Error: ' + err.message);
       }
     }
     
@@ -1494,11 +1509,12 @@
         
         if (result.success) {
           loadTasks();
+          showSuccess('Task deleted successfully');
         } else {
-          alert('Error: ' + (result.error || 'Failed to delete task'));
+          showError('Error: ' + (result.error || 'Failed to delete task'));
         }
       } catch (err) {
-        alert('Error: ' + err.message);
+        showError('Error: ' + err.message);
       }
     }
     
@@ -1521,14 +1537,14 @@
           // Reload tasks and close modal
           loadTasks();
           closeTaskDetailsModal();
-          alert('Task refined successfully!');
+          showSuccess('Task refined successfully!');
         } else {
-          alert('Error: ' + (result.error || 'Failed to refine task'));
+          showError('Error: ' + (result.error || 'Failed to refine task'));
           refineBtn.innerHTML = originalText;
           refineBtn.disabled = false;
         }
       } catch (err) {
-        alert('Error: ' + err.message);
+        showError('Error: ' + err.message);
         const refineBtn = document.getElementById('details-refine-btn');
         refineBtn.innerHTML = '<i class="bi bi-stars"></i> Refine';
         refineBtn.disabled = false;
@@ -1670,7 +1686,7 @@
         modal.classList.add('active');
       } catch (err) {
         console.error('Error loading task details:', err);
-        alert('Error loading task details');
+        showError('Error loading task details');
       }
     }
     
@@ -1745,11 +1761,12 @@
         if (result.success) {
           closeEditTaskModal();
           loadTasks();
+          showSuccess('Task updated successfully');
         } else {
-          alert('Error: ' + (result.error || 'Failed to update task'));
+          showError('Error: ' + (result.error || 'Failed to update task'));
         }
       } catch (err) {
-        alert('Error: ' + err.message);
+        showError('Error: ' + err.message);
       }
     }
     
@@ -1784,7 +1801,7 @@
       const agentId = document.getElementById('agent-select').value;
       
       if (!agentId) {
-        alert('Please select an agent');
+        showError('Please select an agent');
         return;
       }
       
@@ -1804,13 +1821,13 @@
         if (result.success) {
           // Don't update status here - the agent is responsible for moving the task to in-progress
           closeStartTaskModal();
-          alert(`Task assigned to ${agentId} agent! The agent will move it to in-progress when starting work. Session: ${result.sessionKey || 'N/A'}`);
+          showInfo(`Task assigned to ${agentId} agent! The agent will move it to in-progress when starting work. Session: ${result.sessionKey || 'N/A'}`);
           loadTasks(); // Refresh to show assigned agent badge
         } else {
-          alert('Error: ' + (result.error || 'Failed to start task'));
+          showError('Error: ' + (result.error || 'Failed to start task'));
         }
       } catch (err) {
-        alert('Error: ' + err.message);
+        showError('Error: ' + err.message);
       }
     }
     
@@ -1851,7 +1868,7 @@
       const agentId = document.getElementById('refine-agent-select').value;
       
       if (!agentId) {
-        alert('Please select an agent');
+        showError('Please select an agent');
         return;
       }
       
@@ -1870,13 +1887,13 @@
         
         if (result.success) {
           closeRefineTaskModal();
-          alert(`Task ${taskId} assigned to ${agentId} for refinement! The agent will move it to refinement status and enrich the description.`);
+          showInfo(`Task ${taskId} assigned to ${agentId} for refinement! The agent will move it to refinement status and enrich the description.`);
           loadTasks(); // Refresh to show updated status
         } else {
-          alert('Error: ' + (result.error || 'Failed to start refinement'));
+          showError('Error: ' + (result.error || 'Failed to start refinement'));
         }
       } catch (err) {
-        alert('Error: ' + err.message);
+        showError('Error: ' + err.message);
       }
     }
     
@@ -1907,15 +1924,60 @@
           });
           
           loadTasks();
-          alert('Task marked as refined and moved back to todo!');
+          showSuccess('Task marked as refined and moved back to todo!');
         } else {
-          alert('Error: ' + (result.error || 'Failed to complete refinement'));
+          showError('Error: ' + (result.error || 'Failed to complete refinement'));
         }
       } catch (err) {
-        alert('Error: ' + err.message);
+        showError('Error: ' + err.message);
       }
     }
+    
+    // Toast Notification Helpers
+    function showSuccess(message) {
+      Toastify({
+        text: message,
+        duration: 3000,
+        gravity: "top",
+        position: "right",
+        style: {
+          background: "linear-gradient(90deg, #10b981, #059669)",
+          borderRadius: "8px",
+          fontFamily: "Plus Jakarta Sans, sans-serif",
+        }
+      }).showToast();
+    }
+    
+    function showError(message) {
+      Toastify({
+        text: message,
+        duration: -1,
+        gravity: "top",
+        position: "right",
+        style: {
+          background: "linear-gradient(90deg, #ef4444, #dc2626)",
+          borderRadius: "8px",
+          fontFamily: "Plus Jakarta Sans, sans-serif",
+        }
+      }).showToast();
+    }
+    
+    function showInfo(message) {
+      Toastify({
+        text: message,
+        duration: 4000,
+        gravity: "top",
+        position: "right",
+        style: {
+          background: "linear-gradient(90deg, #3b82f6, #2563eb)",
+          borderRadius: "8px",
+          fontFamily: "Plus Jakarta Sans, sans-serif",
+        }
+      }).showToast();
+    }
   </script>
+  
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
   
   <style>
     /* Modal Styles */
@@ -2064,11 +2126,16 @@
       color: var(--text-secondary);
       min-height: 44px;
       min-width: 44px;
+      font-weight: 600;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
     
     .secondary-btn:hover {
       background: var(--bg-hover);
-      border-color: var(--text-muted);
+      border-color: var(--accent-blue);
+      color: var(--text-primary);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
     
     .secondary-btn:active {
@@ -2076,16 +2143,37 @@
     }
     
     .primary-btn {
-      background: var(--accent-blue);
+      background: var(--gradient-primary);
       border: none;
       color: white;
       min-height: 44px;
       min-width: 44px;
+      font-weight: 600;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 15px var(--accent-blue-glow);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .primary-btn::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      transition: left 0.5s ease;
     }
     
     .primary-btn:hover {
-      background: #4094e8;
-      transform: translateY(-1px);
+      background: var(--gradient-primary);
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 8px 25px var(--accent-blue-glow);
+    }
+    
+    .primary-btn:hover::before {
+      left: 100%;
     }
     
     .primary-btn:active {
@@ -2381,26 +2469,60 @@
     }
     
     .stat-item {
-      background: var(--bg-secondary);
-      padding: 1rem;
-      border-radius: 8px;
+      background: linear-gradient(145deg, var(--bg-secondary) 0%, var(--bg-card) 100%);
+      padding: 1.25rem;
+      border-radius: 12px;
       text-align: center;
+      border: 1px solid var(--border-light);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .stat-item::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 70%);
+      opacity: 0;
+      transform: scale(0.5);
+      transition: all 0.5s ease;
+    }
+    
+    .stat-item:hover {
+      transform: translateY(-4px);
+      border-color: rgba(59, 130, 246, 0.3);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3), 0 0 15px rgba(59, 130, 246, 0.1);
+    }
+    
+    .stat-item:hover::before {
+      opacity: 1;
+      transform: scale(1);
     }
     
     .stat-value {
-      font-size: 2rem;
-      font-weight: 700;
-      color: var(--accent-blue);
+      font-size: 2.25rem;
+      font-weight: 800;
+      background: var(--gradient-primary);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
       display: block;
+      position: relative;
+      filter: drop-shadow(0 0 15px var(--accent-blue-glow));
     }
     
     .stat-label {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       color: var(--text-muted);
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-top: 0.25rem;
+      letter-spacing: 0.1em;
+      margin-top: 0.5rem;
       display: block;
+      font-weight: 600;
     }
     
     /* Task Details Modal */

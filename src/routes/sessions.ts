@@ -10,7 +10,7 @@ export const sessions = new Hono();
 sessions.get('/sessions', async (c) => {
   try {
     const sessions = await sessionService.findAll();
-    return c.json(sessions);
+    return c.json({ sessions });
   } catch (error: any) {
     console.error('Error fetching sessions:', error.message);
     return c.json({ error: error.message, sessions: [] });
@@ -24,7 +24,7 @@ sessions.get('/sessions', async (c) => {
 sessions.get('/sessions/active', async (c) => {
   try {
     const sessions = await sessionService.findActive(5);
-    return c.json(sessions);
+    return c.json({ sessions });
   } catch (error: any) {
     console.error('Error fetching active sessions:', error.message);
     return c.json({ error: error.message, sessions: [] });
