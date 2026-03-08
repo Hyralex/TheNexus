@@ -532,10 +532,15 @@ Start the refinement process now.`;
 1. **Mark the task as in-progress** when you start working:
    - Run: \`pm task move ${task.id} in-progress --project ${projectName}\`
 
-2. **Spawn a subagent in a Discord thread** to do the actual work:
-   - Use \`sessions_spawn\` with \`thread: true\` and \`mode: "session"\`
+2. **Attach your session to the task** (CRITICAL - enables session tracking):
+   - Run: \`pm task session attach ${task.id} <your-session-key> --type work --project ${projectName}\`
+   - Your session key is in the session context or run \`openclaw status\` to find it
 
-3. **Complete the task** when work is done:
+3. **Spawn a subagent in a Discord thread** to do the actual work:
+   - Use \`sessions_spawn\` with \`thread: true\` and \`mode: "session"\`
+   - Pass the task details to the subagent so it can also attach its session
+
+4. **Complete the task** when work is done:
    - Run: \`pm task complete ${task.id} --project ${projectName} --message "summary"\`
 
 Start working on this task now.`;
@@ -566,7 +571,8 @@ Start working on this task now.`;
           const projData = loadProjects();
           const taskResult = findTask(taskId);
           if (taskResult) {
-            taskResult.task.sessionKey = sessionKey;
+            // Store as workSessionKey to match pm task session attach convention
+            taskResult.task.workSessionKey = sessionKey;
             taskResult.task.updatedAt = new Date().toISOString();
             projData.projects[taskResult.projectName] = taskResult.project;
             saveProjects(projData);

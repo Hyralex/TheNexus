@@ -96,7 +96,7 @@ body.sidebar-open {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  max-width: 500px;
+  max-width: 700px;
   width: 100%;
   max-height: 85vh;
   overflow-y: auto;
@@ -1871,10 +1871,24 @@ select:focus {
   color: var(--accent-purple) !important;
 }
 
-/* Refinement Action Buttons */
-.refine-btn {
-  background: rgba(163, 113, 247, 0.15);
-  color: var(--accent-purple);
+/* Review Column */
+.review-column {
+  border: 2px solid var(--accent-orange);
+  background: rgba(251, 146, 60, 0.05);
+}
+
+.review-column header h2 {
+  color: var(--accent-orange) !important;
+}
+
+.review-column header h2 i {
+  color: var(--accent-orange) !important;
+}
+
+/* Review Action Buttons */
+.review-btn {
+  background: rgba(251, 146, 60, 0.15);
+  color: var(--accent-orange);
   border: 1px solid var(--accent-purple);
 }
 

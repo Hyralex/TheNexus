@@ -124,11 +124,8 @@ tasks.delete('/tasks/:id', async (c) => {
 tasks.post('/tasks/:id/start-refinement', async (c) => {
   try {
     const body = await c.req.json();
-    const { taskId, agentId, project } = body;
-
-    if (!taskId) {
-      return c.json({ error: 'taskId is required' }, 400);
-    }
+    const taskId = c.req.param('id');
+    const { agentId, project } = body;
 
     if (!agentId) {
       return c.json({ error: 'agentId is required' }, 400);
