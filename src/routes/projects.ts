@@ -1,7 +1,5 @@
 import { Hono } from 'hono';
-import * as fs from 'fs';
-import * as path from 'path';
-import { loadProjects, saveProjects, getProjectsFilePath } from '../lib/projects.js';
+import { projectService } from '../services/project-service.js';
 
 export const projects = new Hono();
 
@@ -11,12 +9,7 @@ export const projects = new Hono();
  */
 projects.get('/projects', async (c) => {
   try {
-    const PROJECTS_FILE = getProjectsFilePath();
-    if (!fs.existsSync(PROJECTS_FILE)) {
-      return c.json({ projects: {}, activeProject: null });
-    }
-
-    const data = loadProjects();
+    const data = await projectService.findAll();
     return c.json(data);
   } catch (error: any) {
     console.error('Error reading projects:', error.message);
@@ -37,43 +30,13 @@ projects.post('/projects', async (c) => {
       return c.json({ error: 'Project name is required' }, 400);
     }
 
-    const PROJECTS_FILE = getProjectsFilePath();
-    const data = loadProjects();
-
-    if (data.projects[name]) {
-      return c.json({ error: 'Project already exists' }, 400);
-    }
-
-    // Create project
-    data.projects[name] = {
-      name,
-      path: path.join(path.dirname(PROJECTS_FILE), name),
-      active: true,
-      createdAt: new Date().toISOString(),
-      description: description || '',
-      tasks: [],
-    };
-
-    // Create project folder and files
-    fs.mkdirSync(data.projects[name].path, { recursive: true });
-    fs.writeFileSync(
-      path.join(data.projects[name].path, 'context.md'),
-      `# ${name}\n\n${description ? description : ''}\n`
-    );
-    fs.writeFileSync(
-      path.join(data.projects[name].path, 'memory.md'),
-      `# Project Memory - ${name}\n\n`
-    );
-    fs.writeFileSync(
-      path.join(data.projects[name].path, 'sessions.json'),
-      JSON.stringify({ sessions: [] }, null, 2)
-    );
-
-    saveProjects(data);
-
-    return c.json({ success: true, project: data.projects[name] });
+    const project = await projectService.create({ name, description });
+    return c.json({ success: true, project });
   } catch (error: any) {
     console.error('Error creating project:', error.message);
+    if (error.message === 'Project already exists') {
+      return c.json({ error: error.message }, 400);
+    }
     return c.json({ error: error.message }, 500);
   }
 });
@@ -88,29 +51,16 @@ projects.put('/projects/:name', async (c) => {
     const body = await c.req.json();
     const { description, name: newName } = body;
 
-    const PROJECTS_FILE = getProjectsFilePath();
-    const data = loadProjects();
-
-    if (!data.projects[projectName]) {
-      return c.json({ error: 'Project not found' }, 404);
-    }
-
-    if (description !== undefined) {
-      data.projects[projectName].description = description;
-    }
-
-    if (newName && newName !== projectName) {
-      // Rename project
-      data.projects[newName] = { ...data.projects[projectName], name: newName };
-      delete data.projects[projectName];
-    }
-
-    data.projects[projectName || newName].updatedAt = new Date().toISOString();
-    saveProjects(data);
-
-    return c.json({ success: true, project: data.projects[projectName || newName] });
+    const project = await projectService.update(projectName, {
+      description,
+      newName,
+    });
+    return c.json({ success: true, project });
   } catch (error: any) {
     console.error('Error updating project:', error.message);
+    if (error.message === 'Project not found') {
+      return c.json({ error: error.message }, 404);
+    }
     return c.json({ error: error.message }, 500);
   }
 });
@@ -122,31 +72,16 @@ projects.put('/projects/:name', async (c) => {
 projects.delete('/projects/:name', async (c) => {
   try {
     const projectName = c.req.param('name');
-
-    const PROJECTS_FILE = getProjectsFilePath();
-    const data = loadProjects();
-
-    if (!data.projects[projectName]) {
-      return c.json({ error: 'Project not found' }, 404);
-    }
-
-    // Check if project has tasks
-    if (data.projects[projectName].tasks && data.projects[projectName].tasks.length > 0) {
-      return c.json({ error: 'Cannot delete project with tasks. Remove all tasks first.' }, 400);
-    }
-
-    // Delete project folder
-    const projectPath = data.projects[projectName].path;
-    if (fs.existsSync(projectPath)) {
-      fs.rmSync(projectPath, { recursive: true });
-    }
-
-    delete data.projects[projectName];
-    saveProjects(data);
-
+    await projectService.delete(projectName);
     return c.json({ success: true, message: 'Project deleted' });
   } catch (error: any) {
     console.error('Error deleting project:', error.message);
+    if (error.message === 'Project not found') {
+      return c.json({ error: error.message }, 404);
+    }
+    if (error.message.includes('Cannot delete project with tasks')) {
+      return c.json({ error: error.message }, 400);
+    }
     return c.json({ error: error.message }, 500);
   }
 });

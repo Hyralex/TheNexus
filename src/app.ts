@@ -5,16 +5,8 @@ import * as fs from 'fs';
 // Create Hono app
 export const app = new Hono();
 
-// In-memory state for activity tracking (will move to service layer in Phase 3)
-export let lastSessionsState: any[] = [];
-export let activityLog: Array<{
-  timestamp: string;
-  type: string;
-  agent: string;
-  message: string;
-}> = [];
-
 // Refinement status tracking (task ID -> status)
+// Note: This is temporary state until Phase 3 database integration
 export const refinementStatus = new Map<string, {
   status: 'pending' | 'completed' | 'failed';
   startedAt: string;

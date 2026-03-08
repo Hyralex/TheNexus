@@ -29,17 +29,22 @@ Server runs on `http://localhost:3000`
 TheNexus/
 ├── src/
 │   ├── index.ts              # Entry point (thin bootstrap)
-│   ├── app.ts                # Hono app setup, shared state
-│   ├── refinement.ts         # Task refinement service
+│   ├── app.ts                # Hono app setup, refinementStatus
+│   ├── refinement.ts         # Task refinement (LLM-based)
 │   ├── lib/
 │   │   ├── openclaw.ts       # OpenClawClient singleton
-│   │   └── projects.ts       # Project file utilities
+│   │   ├── projects.ts       # Project file utilities
+│   │   └── event-emitter.ts  # Pub/sub for internal events
+│   ├── services/
+│   │   ├── task-service.ts   # Task business logic
+│   │   ├── project-service.ts# Project business logic
+│   │   └── session-service.ts# Session business logic
 │   └── routes/
 │       ├── api.ts            # API route grouping
 │       ├── pages.ts          # SPA page routes
-│       ├── sessions.ts       # /api/sessions/* handlers
-│       ├── tasks.ts          # /api/tasks/* handlers
-│       └── projects.ts       # /api/projects/* handlers
+│       ├── sessions.ts       # /api/sessions/* (uses sessionService)
+│       ├── tasks.ts          # /api/tasks/* (uses taskService)
+│       └── projects.ts       # /api/projects/* (uses projectService)
 ├── public/
 │   ├── index.html            # Main dashboard (HTMX + Bootstrap)
 │   ├── styles.css            # Custom styles
@@ -63,7 +68,43 @@ TheNexus/
 
 ---
 
-## Key Concepts
+## Architecture
+
+**Layered architecture:** Routes → Services → Libraries
+
+```typescript
+// Routes delegate to services
+import { taskService } from '../services/task-service.js';
+
+tasks.post('/tasks', async (c) => {
+  const task = await taskService.create({ title, project });
+  return c.json(task);
+});
+
+// Services emit events
+import { eventEmitter } from '../lib/event-emitter.js';
+
+export class TaskService {
+  async create(input: CreateTaskInput): Promise<Task> {
+    // ... create task
+    eventEmitter.emit('task:created', task);
+    return task;
+  }
+}
+```
+
+**Services:**
+- `taskService` - CRUD, refinement, agent spawning
+- `projectService` - CRUD, setActive
+- `sessionService` - Sessions, activity tracking
+
+**EventEmitter events:**
+- `task:created`, `task:updated`, `task:deleted`
+- `task:status-changed`, `task:agent-assigned`
+- `project:created`, `project:updated`, `project:deleted`
+- `session:activity`, `session:ended`
+
+---
 
 ### OpenClaw Integration
 
@@ -188,6 +229,11 @@ tasks.get('/tasks', async (c) => {
 
 **Current:** File-based JSON storage (`~/dev/projects/projects.json`)
 
+**Services are ready for database integration:**
+- All data access goes through services
+- EventEmitter ready for real-time updates
+- Repository pattern will be added in Phase 3
+
 **Planned:** SQLite with libsql
 
 When Phase 3 is complete:
@@ -220,6 +266,34 @@ open http://localhost:3000
 ---
 
 ## Common Tasks
+
+### Adding a New Service
+
+1. Create service in `src/services/`:
+```typescript
+// src/services/example-service.ts
+import { eventEmitter } from '../lib/event-emitter.js';
+
+export class ExampleService {
+  async doSomething(input: string): Promise<string> {
+    const result = `Processed: ${input}`;
+    eventEmitter.emit('example:completed', result);
+    return result;
+  }
+}
+
+export const exampleService = new ExampleService();
+```
+
+2. Use in routes:
+```typescript
+import { exampleService } from '../services/example-service.js';
+
+routes.post('/example', async (c) => {
+  const result = await exampleService.doSomething('test');
+  return c.json({ result });
+});
+```
 
 ### Adding a New Route
 
@@ -268,7 +342,7 @@ import { myState } from '../app.js';
 | Phase | Description | Status |
 |-------|-------------|--------|
 | Phase 1 | Route refactoring | ✅ Complete |
-| Phase 2 | Service layer | ⏳ Pending |
+| Phase 2 | Service layer | ✅ Complete |
 | Phase 3 | Database (SQLite) | ⏳ Pending |
 | Phase 4 | WebSocket real-time | ⏳ Pending |
 | Phase 5 | CLI migration | ⏳ Pending |
