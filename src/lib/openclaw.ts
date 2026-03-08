@@ -25,6 +25,13 @@ export interface SpawnAgentOptions {
   timeout?: number;
 }
 
+export interface Agent {
+  id: string;
+  type: string;
+  model?: string;
+  available?: boolean;
+}
+
 export interface SpawnResult {
   sessionKey?: string;
   stdout: string;
@@ -216,6 +223,22 @@ export class OpenClawClient {
    */
   clearCache(): void {
     this.sessionCache.clear();
+  }
+
+  /**
+   * Get available agents
+   */
+  async getAgents(): Promise<Agent[]> {
+    try {
+      const { stdout } = await execAsync('openclaw agent --list --json', {
+        env: { ...process.env, FORCE_COLOR: '0' },
+      });
+      const data = JSON.parse(stdout);
+      return data.agents || [];
+    } catch (error: any) {
+      console.error('Error fetching agents:', error.message);
+      return [];
+    }
   }
 }
 

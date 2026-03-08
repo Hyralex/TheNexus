@@ -75,7 +75,7 @@
               <h2><i class="bi bi-lightning-charge-fill"></i> Active Now</h2>
               <small>Last 5 minutes</small>
             </header>
-            <div id="active-agents" hx-get="/api/sessions/active" hx-trigger="load, every 10s">
+            <div id="active-agents" hx-get="/api/sessions/active" hx-trigger="load">
               <div class="loading"><i class="bi bi-arrow-clockwise spinning"></i> Loading...</div>
             </div>
           </section>
@@ -84,7 +84,7 @@
           <section class="card">
             <header>
               <h2><i class="bi bi-activity"></i> Activity Feed</h2>
-              <button class="icon-btn" hx-get="/api/activity" hx-target="#activity-feed" hx-trigger="load, every 5s" title="Refresh">
+              <button class="icon-btn" hx-get="/api/activity" hx-target="#activity-feed" hx-trigger="load" onclick="this.setAttribute('hx-trigger', 'load'); htmx.trigger(this, 'load');" title="Refresh">
                 <i class="bi bi-arrow-clockwise"></i>
               </button>
             </header>
@@ -98,7 +98,7 @@
         <section class="card full-width">
           <header>
             <h2><i class="bi bi-clock-history"></i> All Sessions</h2>
-            <button class="icon-btn" hx-get="/api/sessions" hx-target="#sessions-list" hx-trigger="load, every 30s" title="Refresh">
+            <button class="icon-btn" hx-get="/api/sessions" hx-target="#sessions-list" hx-trigger="load" onclick="this.setAttribute('hx-trigger', 'load'); htmx.trigger(this, 'load');" title="Refresh">
               <i class="bi bi-arrow-clockwise"></i>
             </button>
           </header>
@@ -568,8 +568,11 @@
     }
     
     function startSessionAutoRefresh(sessionKey) {
-      if (sessionRefreshInterval) clearInterval(sessionRefreshInterval);
-      sessionRefreshInterval = setInterval(() => loadSessionDetail(sessionKey), 5000);
+      // WebSocket handles real-time updates now
+      if (sessionRefreshInterval) {
+        clearInterval(sessionRefreshInterval);
+        sessionRefreshInterval = null;
+      }
     }
     
     // Load projects for dropdown
@@ -648,8 +651,11 @@
     }
     
     function startTasksAutoRefresh() {
-      if (tasksRefreshInterval) clearInterval(tasksRefreshInterval);
-      tasksRefreshInterval = setInterval(loadTasks, 30000);
+      // WebSocket handles real-time updates now
+      if (tasksRefreshInterval) {
+        clearInterval(tasksRefreshInterval);
+        tasksRefreshInterval = null;
+      }
     }
     
     function renderTasks(tasks) {
@@ -890,6 +896,140 @@
     // Run on load
     handleRouting();
     
+
+    // WebSocket Connection for real-time updates
+    let ws = null;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 5;
+    const RECONNECT_DELAY = 3000;
+
+    function connectWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/api/ws`;
+
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        reconnectAttempts = 0;
+        updateConnectionStatus('connected');
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        updateConnectionStatus('disconnected');
+        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+          reconnectAttempts++;
+          console.log(`Reconnecting... (attempt ${reconnectAttempts})`);
+          setTimeout(connectWebSocket, RECONNECT_DELAY);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        updateConnectionStatus('error');
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          handleWebSocketMessage(message);
+        } catch (e) {
+          console.error('Error parsing WebSocket message:', e);
+        }
+      };
+    }
+
+    function handleWebSocketMessage(message) {
+      console.log('WebSocket message:', message);
+
+      switch (message.type) {
+        case 'task:created':
+        case 'task:updated':
+        case 'task:deleted':
+        case 'task:status-changed':
+        case 'task:agent-assigned':
+          if (window.currentPage === 'projects') {
+            loadTasks();
+          }
+          break;
+
+        case 'project:created':
+        case 'project:updated':
+        case 'project:deleted':
+          if (window.currentPage === 'projects-manage') {
+            loadProjects();
+          }
+          break;
+
+        case 'session:activity':
+        case 'session:ended':
+        case 'session:started':
+          if (window.currentPage === 'sessions') {
+            loadSessions();
+          }
+          if (window.currentPage === 'dashboard') {
+            fetch('/api/activity').then(r => r.json()).then(data => renderActivityFeed(data));
+          }
+          break;
+      }
+    }
+
+    function renderActivityFeed(data) {
+      const activities = data.recent || [];
+      const container = document.getElementById('activity-feed');
+      if (!container) return;
+
+      if (activities.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="bi bi-inbox"></i><p>No recent activity</p></div>';
+        return;
+      }
+
+      const items = activities.map(a => {
+        const time = new Date(a.timestamp).toLocaleTimeString();
+        const icon = getActivityIcon(a.type);
+        return `
+          <div class="activity-item ${a.type}">
+            <span class="activity-icon">${icon}</span>
+            <div class="activity-content">
+              <strong>${a.agent}</strong>
+              <span>${a.message}</span>
+            </div>
+            <small class="activity-time">${time}</small>
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = items;
+    }
+
+    function updateConnectionStatus(status) {
+      const statusDot = document.querySelector('.status-dot');
+      const statusText = document.getElementById('server-status');
+      if (!statusDot || !statusText) return;
+
+      switch (status) {
+        case 'connected':
+          statusDot.classList.remove('error', 'warning');
+          statusDot.classList.add('success');
+          statusText.textContent = 'Connected';
+          break;
+        case 'disconnected':
+          statusDot.classList.remove('success', 'error');
+          statusDot.classList.add('warning');
+          statusText.textContent = 'Reconnecting...';
+          break;
+        case 'error':
+          statusDot.classList.remove('success', 'warning');
+          statusDot.classList.add('error');
+          statusText.textContent = 'Connection error';
+          break;
+      }
+    }
+
+    // Start WebSocket connection
+    connectWebSocket();
+
     // Active agents formatter
     htmx.on('htmx:afterSwap', function(evt) {
       if (evt.detail.target.id === 'active-agents') {
