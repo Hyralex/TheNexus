@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>The Nexus</title>
   <link rel="stylesheet" href="/pico.min.css">
   <link rel="stylesheet" href="/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="/styles.css?v=20260308-1200">
+  <link rel="stylesheet" href="/styles.css?v=20260309-mobile">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -252,9 +252,9 @@
           </form>
         </section>
         
-        <div class="dashboard-grid" style="grid-template-columns: repeat(4, 1fr);">
+        <div class="dashboard-grid kanban-board" style="grid-template-columns: repeat(4, 1fr);">
           <!-- Todo Column -->
-          <section class="card">
+          <section class="card kanban-column">
             <header>
               <h2><i class="bi bi-circle"></i> Todo</h2>
               <small id="todo-count">0</small>
@@ -265,7 +265,7 @@
           </section>
           
           <!-- Refinement Column -->
-          <section class="card refinement-column">
+          <section class="card kanban-column refinement-column">
             <header>
               <h2><i class="bi bi-stars"></i> Refinement</h2>
               <small id="refinement-count">0</small>
@@ -276,7 +276,7 @@
           </section>
           
           <!-- In Progress Column -->
-          <section class="card">
+          <section class="card kanban-column">
             <header>
               <h2><i class="bi bi-half"></i> In Progress</h2>
               <small id="inprogress-count">0</small>
@@ -287,7 +287,7 @@
           </section>
           
           <!-- Review Column -->
-          <section class="card review-column">
+          <section class="card kanban-column review-column">
             <header>
               <h2><i class="bi bi-eye"></i> Review</h2>
               <small id="review-count">0</small>
@@ -298,7 +298,7 @@
           </section>
           
           <!-- Done Column -->
-          <section class="card">
+          <section class="card kanban-column">
             <header>
               <h2><i class="bi bi-check-circle"></i> Done</h2>
               <small id="done-count">0</small>
