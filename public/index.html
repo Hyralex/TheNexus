@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>The Nexus</title>
   <link rel="stylesheet" href="/pico.min.css">
   <link rel="stylesheet" href="/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="/styles.css?v=20260308-1200">
+  <link rel="stylesheet" href="/styles.css?v=20260309-mobile">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -252,9 +252,9 @@
           </form>
         </section>
         
-        <div class="dashboard-grid" style="grid-template-columns: repeat(4, 1fr);">
+        <div class="dashboard-grid kanban-board" style="grid-template-columns: repeat(4, 1fr);">
           <!-- Todo Column -->
-          <section class="card">
+          <section class="card kanban-column">
             <header>
               <h2><i class="bi bi-circle"></i> Todo</h2>
               <small id="todo-count">0</small>
@@ -265,7 +265,7 @@
           </section>
           
           <!-- Refinement Column -->
-          <section class="card refinement-column">
+          <section class="card kanban-column refinement-column">
             <header>
               <h2><i class="bi bi-stars"></i> Refinement</h2>
               <small id="refinement-count">0</small>
@@ -276,7 +276,7 @@
           </section>
           
           <!-- In Progress Column -->
-          <section class="card">
+          <section class="card kanban-column">
             <header>
               <h2><i class="bi bi-half"></i> In Progress</h2>
               <small id="inprogress-count">0</small>
@@ -286,8 +286,19 @@
             </div>
           </section>
           
+          <!-- Review Column -->
+          <section class="card kanban-column review-column">
+            <header>
+              <h2><i class="bi bi-eye"></i> Review</h2>
+              <small id="review-count">0</small>
+            </header>
+            <div id="review-tasks" class="task-list">
+              <div class="loading"><i class="bi bi-arrow-clockwise spinning"></i> Loading...</div>
+            </div>
+          </section>
+          
           <!-- Done Column -->
-          <section class="card">
+          <section class="card kanban-column">
             <header>
               <h2><i class="bi bi-check-circle"></i> Done</h2>
               <small id="done-count">0</small>
@@ -666,6 +677,7 @@
       const todo = tasks.filter(t => t.status === 'todo');
       const refinement = tasks.filter(t => t.status === 'refinement');
       const inProgress = tasks.filter(t => t.status === 'in-progress');
+      const review = tasks.filter(t => t.status === 'review');
       const done = tasks
         .filter(t => t.status === 'done')
         .sort((a, b) => {
@@ -678,6 +690,7 @@
       document.getElementById('todo-count').textContent = todo.length;
       document.getElementById('refinement-count').textContent = refinement.length;
       document.getElementById('inprogress-count').textContent = inProgress.length;
+      document.getElementById('review-count').textContent = review.length;
       document.getElementById('done-count').textContent = done.length;
       
       document.getElementById('todo-tasks').innerHTML = todo.length === 0 
@@ -691,6 +704,10 @@
       document.getElementById('inprogress-tasks').innerHTML = inProgress.length === 0
         ? '<div class="empty-state"><i class="bi bi-inbox"></i><p>No tasks</p></div>'
         : inProgress.map(renderTaskCard).join('');
+      
+      document.getElementById('review-tasks').innerHTML = review.length === 0
+        ? '<div class="empty-state"><i class="bi bi-inbox"></i><p>No tasks</p></div>'
+        : review.map(renderTaskCard).join('');
       
       document.getElementById('done-tasks').innerHTML = done.length === 0
         ? '<div class="empty-state"><i class="bi bi-inbox"></i><p>No tasks</p></div>'
@@ -781,10 +798,19 @@
         `;
       } else if (task.status === 'in-progress') {
         actionButtons = `
-          <button class="task-action-btn complete-btn" onclick="updateTaskStatus('${task.id}', 'done')" title="Complete task">
-            <i class="bi bi-check-lg"></i> Complete
+          <button class="task-action-btn review-btn" onclick="updateTaskStatus('${task.id}', 'review')" title="Send to review">
+            <i class="bi bi-eye"></i> Send to Review
           </button>
           <button class="task-action-btn reopen-btn" onclick="updateTaskStatus('${task.id}', 'todo')" title="Move back to todo">
+            <i class="bi bi-arrow-left"></i> Reopen
+          </button>
+        `;
+      } else if (task.status === 'review') {
+        actionButtons = `
+          <button class="task-action-btn complete-btn" onclick="updateTaskStatus('${task.id}', 'done')" title="Approve and complete">
+            <i class="bi bi-check-lg"></i> Approve
+          </button>
+          <button class="task-action-btn reopen-btn" onclick="updateTaskStatus('${task.id}', 'in-progress')" title="Send back to in-progress">
             <i class="bi bi-arrow-left"></i> Reopen
           </button>
         `;
